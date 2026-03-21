@@ -267,17 +267,16 @@ document.getElementById('scene-leave').addEventListener('click', async()=>{
   finally { btn.classList.remove('is-busy'); hideProgress(); }
 });
 
-// Je rentre : Confort sur les non-exclus (respecte les exclusions)
+// Je rentre : Prog ON sur les non-exclus uniquement
 document.getElementById('scene-home').addEventListener('click', async()=>{
   const btn=document.getElementById('scene-home');
   btn.classList.add('is-busy'); showProgress();
   try {
-    const r = await api('POST','mode-all',{mode:'cft'});
-    // Mettre a jour localement seulement les non-exclus
+    const r = await api('POST','timer-all',{enabled:true});
     const excl = await api('GET','exclusions');
-    devices.forEach(d=>{if(deviceStatuses[d.did] && !excl.includes(d.did)) deviceStatuses[d.did].mode='cft'});
-    render(); flashCards(devices.filter(d=>!excl.includes(d.did)).map(d=>d.did),'cft');
-    r.failed>0 ? toast(`🏠 Retour — ${r.failed} echec(s)`,'error') : toast('🏠 Retour active','success');
+    devices.forEach(d=>{if(deviceStatuses[d.did] && !excl.includes(d.did)) deviceStatuses[d.did].timer_switch=1});
+    render();
+    r.failed>0 ? toast(`🏠 Retour — ${r.failed} echec(s)`,'error') : toast('🏠 Retour — Prog ON','success');
     delayedRefresh(8000);
   } catch(e) { toast('❌ '+e.message,'error'); }
   finally { btn.classList.remove('is-busy'); hideProgress(); }
