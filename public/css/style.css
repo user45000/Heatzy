@@ -422,6 +422,9 @@ body {
 
 .btn-icon.spinning svg { animation: spin 0.6s linear infinite; }
 
+/* Bouton en cours de chargement */
+.loading-btn { opacity: 0.5; pointer-events: none; }
+
 /* ==================== MOBILE ==================== */
 @media (max-width: 600px) {
   .device-grid { grid-template-columns: 1fr; }

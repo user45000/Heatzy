@@ -307,6 +307,8 @@ document.getElementById('devices').addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-action]');
   if (!btn || btn.disabled) return;
 
+  // Feedback visuel immediat
+  btn.classList.add('loading-btn');
   const action = btn.dataset.action;
   const { dids, isV1s } = unb64(btn.dataset.targets);
   const label = dids.length === 1 ? getDeviceName(dids[0]) : `${dids.length} appareils`;
@@ -314,19 +316,33 @@ document.getElementById('devices').addEventListener('click', async (e) => {
   try {
     if (action === 'mode') {
       const mode = btn.dataset.mode;
-      await Promise.all(dids.map((did, i) =>
-        api('POST', `devices/${did}/mode`, { mode, is_v1: isV1s ? isV1s[i] : false })
-      ));
-      toast(`${label} → ${MODE_LABELS[mode]}`, 'success');
+      // Envoi sequentiel pour les groupes (evite de surcharger l'API)
+      const results = [];
+      for (let i = 0; i < dids.length; i++) {
+        const r = await api('POST', `devices/${dids[i]}/mode`, { mode, is_v1: isV1s ? isV1s[i] : false });
+        results.push(r);
+      }
+      const verified = results.filter(r => r.verified).length;
+      const total = dids.length;
+      if (verified === total) {
+        toast(`${label} → ${MODE_LABELS[mode]} (verifie)`, 'success');
+      } else if (verified > 0) {
+        toast(`${label} → ${MODE_LABELS[mode]} (${verified}/${total} verifies)`, 'success');
+      } else {
+        toast(`${label} → ${MODE_LABELS[mode]} (en cours...)`, 'success');
+      }
       dids.forEach(did => {
-        if (deviceStatuses[did]) deviceStatuses[did].mode = mode;
+        if (deviceStatuses[did]) {
+          deviceStatuses[did].mode = mode;
+          deviceStatuses[did].timer_switch = 0; // Programme desactive par le serveur
+        }
       });
 
     } else if (action === 'timer') {
       const enabled = btn.dataset.enabled === 'true';
-      await Promise.all(dids.map(did =>
-        api('POST', `devices/${did}/timer`, { enabled })
-      ));
+      for (const did of dids) {
+        await api('POST', `devices/${did}/timer`, { enabled });
+      }
       toast(`${label} — Programme ${enabled ? 'active' : 'desactive'}`, 'success');
       dids.forEach(did => {
         if (deviceStatuses[did]) deviceStatuses[did].timer_switch = enabled ? 1 : 0;
@@ -334,9 +350,9 @@ document.getElementById('devices').addEventListener('click', async (e) => {
 
     } else if (action === 'lock') {
       const enabled = btn.dataset.enabled === 'true';
-      await Promise.all(dids.map(did =>
-        api('POST', `devices/${did}/lock`, { enabled })
-      ));
+      for (const did of dids) {
+        await api('POST', `devices/${did}/lock`, { enabled });
+      }
       toast(`${label} — Verrou ${enabled ? 'active' : 'desactive'}`, 'success');
       dids.forEach(did => {
         if (deviceStatuses[did]) deviceStatuses[did].lock_switch = enabled ? 1 : 0;
@@ -344,9 +360,9 @@ document.getElementById('devices').addEventListener('click', async (e) => {
 
     } else if (action === 'boost') {
       const minutes = parseInt(btn.dataset.minutes);
-      await Promise.all(dids.map(did =>
-        api('POST', `devices/${did}/boost`, { minutes })
-      ));
+      for (const did of dids) {
+        await api('POST', `devices/${did}/boost`, { minutes });
+      }
       const dur = minutes >= 60 ? `${minutes / 60}h` : `${minutes}min`;
       toast(`${label} — Boost ${dur} active`, 'success');
       dids.forEach(did => {
@@ -355,9 +371,12 @@ document.getElementById('devices').addEventListener('click', async (e) => {
     }
 
     renderDevices();
-    delayedRefresh();
+    delayedRefresh(5000);
   } catch (err) {
     toast('Erreur: ' + err.message, 'error');
+    delayedRefresh(2000);
+  } finally {
+    btn.classList.remove('loading-btn');
   }
 });
 
@@ -395,26 +414,34 @@ document.getElementById('programme-off-btn').addEventListener('click', async () 
 document.querySelectorAll('.control-buttons .btn-mode').forEach(btn => {
   btn.addEventListener('click', async () => {
     const mode = btn.dataset.mode;
+    btn.classList.add('loading-btn');
     try {
       const result = await api('POST', 'mode-all', { mode });
-      toast(`Tous en ${MODE_LABELS[mode]} — ${result.succeeded}/${result.total}`, 'success');
-      // Mise a jour optimiste
+      const msg = result.verified !== undefined
+        ? `Tous en ${MODE_LABELS[mode]} — ${result.verified}/${result.total} verifies`
+        : `Tous en ${MODE_LABELS[mode]} — ${result.succeeded}/${result.total}`;
+      toast(msg, 'success');
       devices.forEach(d => {
-        if (deviceStatuses[d.did]) deviceStatuses[d.did].mode = mode;
+        if (deviceStatuses[d.did]) {
+          deviceStatuses[d.did].mode = mode;
+          deviceStatuses[d.did].timer_switch = 0;
+        }
       });
       renderDevices();
-      delayedRefresh();
+      delayedRefresh(5000);
     } catch (err) {
       toast('Erreur: ' + err.message, 'error');
+    } finally {
+      btn.classList.remove('loading-btn');
     }
   });
 });
 
 // Refresh silencieux apres un delai (laisse le temps a l'API de propager)
 let refreshTimer;
-function delayedRefresh() {
+function delayedRefresh(ms = 5000) {
   clearTimeout(refreshTimer);
-  refreshTimer = setTimeout(() => loadDevices(), 3000);
+  refreshTimer = setTimeout(() => loadDevices(), ms);
 }
 
 // --- Refresh ---
