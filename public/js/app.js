@@ -159,9 +159,19 @@ function renderDevices() {
             Verrou ${lockOn ? 'ON' : 'OFF'}
           </button>
           <button class="extra-btn"
-                  onclick="boostDevice('${d.did}')"
+                  onclick="boostDevice('${d.did}', 60)"
                   ${!d.is_online ? 'disabled' : ''}>
             Boost 1h
+          </button>
+          <button class="extra-btn"
+                  onclick="boostDevice('${d.did}', 240)"
+                  ${!d.is_online ? 'disabled' : ''}>
+            Boost 4h
+          </button>
+          <button class="extra-btn"
+                  onclick="boostDevice('${d.did}', 480)"
+                  ${!d.is_online ? 'disabled' : ''}>
+            Boost 8h
           </button>
         </div>
       </div>
@@ -207,11 +217,12 @@ async function toggleLock(did, enabled) {
 }
 window.toggleLock = toggleLock;
 
-async function boostDevice(did) {
+async function boostDevice(did, minutes = 60) {
   try {
-    await api('POST', `devices/${did}/boost`, { minutes: 60 });
-    toast(`${getDeviceName(did)} — Boost 1h activé`, 'success');
-    if (deviceStatuses[did]) { deviceStatuses[did].derog_mode = 2; deviceStatuses[did].derog_time = 60; }
+    await api('POST', `devices/${did}/boost`, { minutes });
+    const label = minutes >= 60 ? `${minutes / 60}h` : `${minutes}min`;
+    toast(`${getDeviceName(did)} — Boost ${label} activé`, 'success');
+    if (deviceStatuses[did]) { deviceStatuses[did].derog_mode = 2; deviceStatuses[did].derog_time = minutes; }
     renderDevices();
   } catch (err) {
     toast('Erreur: ' + err.message, 'error');

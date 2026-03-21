@@ -53,6 +53,7 @@ body {
 }
 
 .screen { min-height: 100svh; }
+[hidden] { display: none !important; }
 
 /* Login */
 #login-screen {
