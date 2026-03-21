@@ -165,6 +165,18 @@ body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var
 .btn-go{padding:8px 16px;border:none;border-radius:var(--r2);background:var(--cft);color:#fff;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;margin-left:auto}
 .btn-cancel{width:100%;padding:8px;border:1px solid var(--border);border-radius:var(--r2);background:transparent;color:var(--t3);font-size:12px;font-family:inherit;cursor:pointer}
 .btn-cancel:hover{background:rgba(255,255,255,.04)}
+.modal-footer{margin-top:12px}
+
+/* Config exclusions */
+.config-desc{color:var(--t3);font-size:11px;margin-bottom:12px;line-height:1.5}
+.config-list{display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow-y:auto}
+.config-item{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:rgba(255,255,255,.03);border-radius:var(--r2);border:1px solid var(--border)}
+.config-item-name{font-size:12px;font-weight:500}
+.config-toggle{width:44px;height:24px;background:var(--ok);border-radius:12px;border:none;cursor:pointer;position:relative;transition:background .2s;flex-shrink:0}
+.config-toggle.excluded{background:var(--stop)}
+.config-toggle::after{content:'';position:absolute;width:20px;height:20px;background:#fff;border-radius:50%;top:2px;left:2px;transition:transform .2s}
+.config-toggle.excluded::after{transform:translateX(20px)}
+.config-toggle-label{font-size:10px;color:var(--t3);margin-left:6px}
 
 /* Toast */
 .toast{position:fixed;bottom:calc(20px + var(--safe-b));left:50%;transform:translateX(-50%) translateY(16px);background:var(--bg3);color:var(--text);padding:10px 20px;border-radius:var(--r);font-size:12px;font-weight:500;box-shadow:0 4px 20px rgba(0,0,0,.4);border:1px solid var(--border);z-index:2000;opacity:0;transition:all .25s;max-width:90vw;text-align:center}

@@ -250,23 +250,98 @@ function toast(msg,type=''){
 }
 
 // --- Scenarios ---
-async function runScenario(name, mode) {
-  const btn = document.getElementById('scene-'+name);
+// Je pars : Prog OFF + OFF sur TOUS (force=true, pas d'exclusions)
+document.getElementById('scene-leave').addEventListener('click', async()=>{
+  const btn=document.getElementById('scene-leave');
   btn.classList.add('is-busy'); showProgress();
   try {
-    const r = await api('POST','mode-all',{mode});
-    devices.forEach(d=>{if(deviceStatuses[d.did])deviceStatuses[d.did].mode=mode});
-    render(); flashCards(devices.map(d=>d.did),mode);
-    const labels = {leave:'🧳 Depart',home:'🏠 Retour',night:'🌙 Bonne nuit'};
-    r.failed>0 ? toast(`${labels[name]} — ${r.failed} echec(s)`,'error') : toast(`${labels[name]} active`,'success');
+    // D'abord prog off sur tous
+    await api('POST','timer-all',{enabled:false});
+    // Puis off sur tous (force=true ignore les exclusions)
+    const r = await api('POST','mode-all',{mode:'stop',force:true});
+    devices.forEach(d=>{if(deviceStatuses[d.did]){deviceStatuses[d.did].mode='stop';deviceStatuses[d.did].timer_switch=0}});
+    render(); flashCards(devices.map(d=>d.did),'stop');
+    r.failed>0 ? toast(`🧳 Depart — ${r.failed} echec(s)`,'error') : toast('🧳 Depart active','success');
     delayedRefresh(8000);
   } catch(e) { toast('❌ '+e.message,'error'); }
   finally { btn.classList.remove('is-busy'); hideProgress(); }
-}
+});
 
-document.getElementById('scene-leave').addEventListener('click',()=>runScenario('leave','fro'));
-document.getElementById('scene-home').addEventListener('click',()=>runScenario('home','cft'));
-document.getElementById('scene-night').addEventListener('click',()=>runScenario('night','eco'));
+// Je rentre : Confort sur les non-exclus (respecte les exclusions)
+document.getElementById('scene-home').addEventListener('click', async()=>{
+  const btn=document.getElementById('scene-home');
+  btn.classList.add('is-busy'); showProgress();
+  try {
+    const r = await api('POST','mode-all',{mode:'cft'});
+    // Mettre a jour localement seulement les non-exclus
+    const excl = await api('GET','exclusions');
+    devices.forEach(d=>{if(deviceStatuses[d.did] && !excl.includes(d.did)) deviceStatuses[d.did].mode='cft'});
+    render(); flashCards(devices.filter(d=>!excl.includes(d.did)).map(d=>d.did),'cft');
+    r.failed>0 ? toast(`🏠 Retour — ${r.failed} echec(s)`,'error') : toast('🏠 Retour active','success');
+    delayedRefresh(8000);
+  } catch(e) { toast('❌ '+e.message,'error'); }
+  finally { btn.classList.remove('is-busy'); hideProgress(); }
+});
+
+// Mode nuit : Nuit sur les non-exclus
+document.getElementById('scene-night').addEventListener('click', async()=>{
+  const btn=document.getElementById('scene-night');
+  btn.classList.add('is-busy'); showProgress();
+  try {
+    const r = await api('POST','mode-all',{mode:'eco'});
+    const excl = await api('GET','exclusions');
+    devices.forEach(d=>{if(deviceStatuses[d.did] && !excl.includes(d.did)) deviceStatuses[d.did].mode='eco'});
+    render(); flashCards(devices.filter(d=>!excl.includes(d.did)).map(d=>d.did),'eco');
+    r.failed>0 ? toast(`🌙 Mode nuit — ${r.failed} echec(s)`,'error') : toast('🌙 Mode nuit active','success');
+    delayedRefresh(8000);
+  } catch(e) { toast('❌ '+e.message,'error'); }
+  finally { btn.classList.remove('is-busy'); hideProgress(); }
+});
+
+// --- Config exclusions ---
+document.getElementById('config-btn').addEventListener('click', async()=>{
+  try {
+    const excl = await api('GET','exclusions');
+    const list = document.getElementById('config-list');
+    list.innerHTML = devices.map(d => {
+      const isExcl = excl.includes(d.did);
+      return `<div class="config-item">
+        <span class="config-item-name">${esc(d.name)}</span>
+        <div style="display:flex;align-items:center">
+          <span class="config-toggle-label">${isExcl?'Exclu':'Inclus'}</span>
+          <button class="config-toggle ${isExcl?'excluded':''}" data-did="${d.did}"></button>
+        </div>
+      </div>`;
+    }).join('');
+    document.getElementById('config-modal').hidden = false;
+  } catch(e) { toast('❌ '+e.message,'error'); }
+});
+
+document.getElementById('config-cancel').addEventListener('click',()=>{
+  document.getElementById('config-modal').hidden=true;
+});
+
+// Toggle exclusion
+document.getElementById('config-list').addEventListener('click', async(e)=>{
+  const toggle = e.target.closest('.config-toggle');
+  if (!toggle) return;
+  const did = toggle.dataset.did;
+  try {
+    const excl = await api('GET','exclusions');
+    let newExcl;
+    if (excl.includes(did)) {
+      newExcl = excl.filter(d=>d!==did);
+    } else {
+      newExcl = [...excl, did];
+    }
+    await api('POST','exclusions',{excluded:newExcl});
+    // Mettre a jour le toggle visuellement
+    toggle.classList.toggle('excluded');
+    const label = toggle.previousElementSibling;
+    label.textContent = toggle.classList.contains('excluded') ? 'Exclu' : 'Inclus';
+    toast('⚙️ Exclusions mises a jour','success');
+  } catch(e) { toast('❌ '+e.message,'error'); }
+});
 
 // --- Offline alert ---
 function updateOfflineAlert() {

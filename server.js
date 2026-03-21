@@ -8,12 +8,23 @@ const app = express();
 const PORT = process.env.PORT || 3002;
 const BASE_PATH = process.env.BASE_PATH || '/';
 
+const fs = require('fs');
+
 const GIZWITS_API = 'https://euapi.gizwits.com/app';
 const APP_ID = 'c70a66ff039d41b4a220e198b0fcc8b3';
 
-// Cache serveur des modes envoyes (pallier les lectures obsoletes de Gizwits)
-// Cle: did, valeur: { mode, ts }
+// Cache serveur des modes envoyes
 const sentModes = {};
+
+// Exclusions : liste des did exclus des actions globales (sauf OFF/Prog OFF)
+const EXCLUSIONS_FILE = path.join(__dirname, 'exclusions.json');
+function loadExclusions() {
+  try { return JSON.parse(fs.readFileSync(EXCLUSIONS_FILE, 'utf8')); }
+  catch { return []; }
+}
+function saveExclusions(list) {
+  fs.writeFileSync(EXCLUSIONS_FILE, JSON.stringify(list), 'utf8');
+}
 
 app.use(express.json());
 app.use(session({
@@ -264,12 +275,28 @@ app.post(BASE_PATH + 'api/devices/:did/mode', requireAuth, async (req, res) => {
   }
 });
 
-// Mode global — envoi + verification + re-essai
+// Exclusions API
+app.get(BASE_PATH + 'api/exclusions', requireAuth, (req, res) => {
+  res.json(loadExclusions());
+});
+app.post(BASE_PATH + 'api/exclusions', requireAuth, (req, res) => {
+  const { excluded } = req.body; // array of did strings
+  if (!Array.isArray(excluded)) return res.status(400).json({ error: 'excluded doit etre un tableau' });
+  saveExclusions(excluded);
+  res.json({ success: true, excluded });
+});
+
+// Mode global — avec exclusions (sauf stop qui s'applique a tous)
 app.post(BASE_PATH + 'api/mode-all', requireAuth, async (req, res) => {
   try {
-    const { mode } = req.body;
+    const { mode, force } = req.body;
     const bindings = await gizwitsRequest('GET', '/bindings?limit=50&skip=0', req.session.token);
-    const devices = (bindings.devices || []).filter(d => d.is_online);
+    let devices = (bindings.devices || []).filter(d => d.is_online);
+    // stop et force s'appliquent a tous, les autres respectent les exclusions
+    if (mode !== 'stop' && !force) {
+      const excl = loadExclusions();
+      devices = devices.filter(d => !excl.includes(d.did));
+    }
     const result = await sendModeToAll(devices, req.session.token, mode);
     res.json({ success: true, ...result });
   } catch (err) {
@@ -282,12 +309,17 @@ app.post(BASE_PATH + 'api/mode-all', requireAuth, async (req, res) => {
   }
 });
 
-// Programme global
+// Programme global — avec exclusions (sauf desactivation qui s'applique a tous)
 app.post(BASE_PATH + 'api/timer-all', requireAuth, async (req, res) => {
   try {
     const { enabled } = req.body;
     const bindings = await gizwitsRequest('GET', '/bindings?limit=50&skip=0', req.session.token);
-    const devices = bindings.devices || [];
+    let devices = bindings.devices || [];
+    // Desactiver s'applique a tous, activer respecte les exclusions
+    if (enabled) {
+      const excl = loadExclusions();
+      devices = devices.filter(d => !excl.includes(d.did));
+    }
     const result = await sendToAll(devices, req.session.token, () => ({ attrs: { timer_switch: enabled ? 1 : 0 } }));
     res.json({ success: true, ...result });
   } catch (err) {

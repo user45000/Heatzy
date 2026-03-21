@@ -50,7 +50,8 @@
     <div class="scenarios">
       <button class="scene-btn scene-leave" id="scene-leave">🧳 Je pars</button>
       <button class="scene-btn scene-home" id="scene-home">🏠 Je rentre</button>
-      <button class="scene-btn scene-night" id="scene-night">🌙 Bonne nuit</button>
+      <button class="scene-btn scene-night" id="scene-night">🌙 Mode nuit</button>
+      <button class="icon-btn" id="config-btn" title="Configurer exclusions">⚙️</button>
     </div>
 
     <!-- Offline alert -->
@@ -74,6 +75,18 @@
 
     <div id="loading" class="loading" hidden>
       <div class="spinner"></div>
+    </div>
+  </div>
+
+  <!-- Config modal -->
+  <div id="config-modal" class="modal-bg" hidden>
+    <div class="modal">
+      <h3>⚙️ Exclusions</h3>
+      <p class="config-desc">Les appareils exclus ne seront PAS affectes par les actions globales (Confort, Nuit, Hors-gel, Prog ON, Je rentre, Mode nuit).<br>Off et Prog OFF s'appliquent toujours a tous.</p>
+      <div id="config-list" class="config-list"></div>
+      <div class="modal-footer">
+        <button class="btn-cancel" id="config-cancel">Fermer</button>
+      </div>
     </div>
   </div>
 
