@@ -9,43 +9,6 @@ const MODE_LABELS = {
 let devices = [];
 let deviceStatuses = {};
 
-// --- Cache local des commandes envoyees ---
-// Quand on envoie un mode, on le sauvegarde en localStorage avec un timestamp.
-// Au chargement, si une commande a ete envoyee il y a moins de 10 min,
-// on utilise ce mode au lieu de celui retourne par l'API (qui peut etre en retard).
-const LOCAL_CACHE_KEY = 'heatzy_sent_modes';
-const LOCAL_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
-
-function saveSentMode(did, field, value) {
-  const cache = JSON.parse(localStorage.getItem(LOCAL_CACHE_KEY) || '{}');
-  if (!cache[did]) cache[did] = {};
-  cache[did][field] = { value, ts: Date.now() };
-  localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(cache));
-}
-
-function applySentModes() {
-  const cache = JSON.parse(localStorage.getItem(LOCAL_CACHE_KEY) || '{}');
-  const now = Date.now();
-  let changed = false;
-  for (const did of Object.keys(cache)) {
-    if (!deviceStatuses[did]) continue;
-    for (const field of Object.keys(cache[did])) {
-      const entry = cache[did][field];
-      if (now - entry.ts < LOCAL_CACHE_TTL) {
-        deviceStatuses[did][field] = entry.value;
-      } else {
-        delete cache[did][field];
-        changed = true;
-      }
-    }
-    if (Object.keys(cache[did]).length === 0) {
-      delete cache[did];
-      changed = true;
-    }
-  }
-  if (changed) localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(cache));
-}
-
 // --- API helpers ---
 async function api(method, path, body) {
   const opts = {
@@ -131,8 +94,6 @@ async function loadDevices() {
     devices.forEach((d, i) => {
       deviceStatuses[d.did] = statuses[i].status === 'fulfilled' ? statuses[i].value : {};
     });
-    // Appliquer les modes envoyes recemment (l'API peut retourner des valeurs obsoletes)
-    applySentModes();
     renderDevices();
   } catch (err) {
     toast('Erreur chargement: ' + err.message, 'error');
@@ -410,7 +371,7 @@ document.getElementById('devices').addEventListener('click', async (e) => {
       }
       dids.forEach(did => {
         if (deviceStatuses[did]) deviceStatuses[did].mode = mode;
-        saveSentMode(did, 'mode', mode);
+
       });
       renderDevices();
       flashCards(dids, mode);
@@ -423,7 +384,7 @@ document.getElementById('devices').addEventListener('click', async (e) => {
       }
       dids.forEach(did => {
         if (deviceStatuses[did]) deviceStatuses[did].timer_switch = enabled ? 1 : 0;
-        saveSentMode(did, 'timer_switch', enabled ? 1 : 0);
+
       });
       renderDevices();
       toast(`${label} — Programme ${enabled ? 'active' : 'desactive'}`, 'success');
@@ -435,7 +396,7 @@ document.getElementById('devices').addEventListener('click', async (e) => {
       }
       dids.forEach(did => {
         if (deviceStatuses[did]) deviceStatuses[did].lock_switch = enabled ? 1 : 0;
-        saveSentMode(did, 'lock_switch', enabled ? 1 : 0);
+
       });
       renderDevices();
       toast(`${label} — Verrou ${enabled ? 'active' : 'desactive'}`, 'success');
@@ -470,7 +431,7 @@ document.getElementById('programme-on-btn').addEventListener('click', async () =
     const result = await api('POST', 'timer-all', { enabled: true });
     devices.forEach(d => {
       if (deviceStatuses[d.did]) deviceStatuses[d.did].timer_switch = 1;
-      saveSentMode(d.did, 'timer_switch', 1);
+
     });
     renderDevices();
     toast(`Programme active — ${result.succeeded}/${result.total} appareils`, 'success');
@@ -490,7 +451,7 @@ document.getElementById('programme-off-btn').addEventListener('click', async () 
     const result = await api('POST', 'timer-all', { enabled: false });
     devices.forEach(d => {
       if (deviceStatuses[d.did]) deviceStatuses[d.did].timer_switch = 0;
-      saveSentMode(d.did, 'timer_switch', 0);
+
     });
     renderDevices();
     toast(`Programme desactive — ${result.succeeded}/${result.total} appareils`, 'success');
@@ -512,7 +473,7 @@ document.querySelectorAll('.control-buttons .btn-mode').forEach(btn => {
       const result = await api('POST', 'mode-all', { mode });
       devices.forEach(d => {
         if (deviceStatuses[d.did]) deviceStatuses[d.did].mode = mode;
-        saveSentMode(d.did, 'mode', mode);
+
       });
       renderDevices();
       const allDids = devices.map(d => d.did);

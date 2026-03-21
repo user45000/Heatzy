@@ -15,7 +15,7 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'heatzy-web-secret-key-change-in-prod',
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 }
+  cookie: { maxAge: 365 * 24 * 60 * 60 * 1000 } // 1 an
 }));
 
 app.use(BASE_PATH, express.static(path.join(__dirname, 'public')));
@@ -107,8 +107,32 @@ async function sendModeToAll(devices, token, mode) {
   return { total: devices.length, succeeded, failed: devices.length - succeeded };
 }
 
-function requireAuth(req, res, next) {
-  if (!req.session.token) return res.status(401).json({ error: 'Non authentifie' });
+// Re-login automatique si le token Gizwits a expire
+async function refreshTokenIfNeeded(req) {
+  if (!req.session.credentials) return false;
+  try {
+    const result = await gizwitsRequest('POST', '/login', null, {
+      username: req.session.credentials.username,
+      password: req.session.credentials.password,
+      lang: 'en'
+    });
+    req.session.token = result.token;
+    req.session.expireAt = result.expire_at;
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function requireAuth(req, res, next) {
+  if (!req.session.token) {
+    // Tenter un re-login si on a les credentials
+    if (req.session.credentials) {
+      const ok = await refreshTokenIfNeeded(req);
+      if (ok) return next();
+    }
+    return res.status(401).json({ error: 'Non authentifie' });
+  }
   next();
 }
 
@@ -121,6 +145,7 @@ app.post(BASE_PATH + 'api/login', async (req, res) => {
     const result = await gizwitsRequest('POST', '/login', null, { username, password, lang: 'en' });
     req.session.token = result.token;
     req.session.expireAt = result.expire_at;
+    req.session.credentials = { username, password };
     res.json({ success: true });
   } catch (err) {
     res.status(401).json({ error: 'Identifiants incorrects' });
@@ -149,7 +174,11 @@ app.get(BASE_PATH + 'api/devices', requireAuth, async (req, res) => {
     }));
     res.json(devices);
   } catch (err) {
-    if (err.status === 401) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
+    if (err.status === 401) {
+      const ok = await refreshTokenIfNeeded(req);
+      if (!ok) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
+      return res.status(503).json({ error: 'Token renouvele, reessayez' });
+    }
     res.status(500).json({ error: 'Erreur API' });
   }
 });
@@ -160,7 +189,11 @@ app.get(BASE_PATH + 'api/devices/:did/status', requireAuth, async (req, res) => 
     const result = await gizwitsRequest('GET', `/devdata/${req.params.did}/latest`, req.session.token);
     res.json(result.attr || result.attrs || {});
   } catch (err) {
-    if (err.status === 401) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
+    if (err.status === 401) {
+      const ok = await refreshTokenIfNeeded(req);
+      if (!ok) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
+      return res.status(503).json({ error: 'Token renouvele, reessayez' });
+    }
     res.status(500).json({ error: 'Erreur API' });
   }
 });
@@ -171,7 +204,11 @@ app.get(BASE_PATH + 'api/devices/:did/raw', requireAuth, async (req, res) => {
     const result = await gizwitsRequest('GET', `/devdata/${req.params.did}/latest`, req.session.token);
     res.json(result);
   } catch (err) {
-    if (err.status === 401) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
+    if (err.status === 401) {
+      const ok = await refreshTokenIfNeeded(req);
+      if (!ok) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
+      return res.status(503).json({ error: 'Token renouvele, reessayez' });
+    }
     res.status(500).json({ error: 'Erreur API', details: err });
   }
 });
@@ -183,7 +220,11 @@ app.post(BASE_PATH + 'api/devices/:did/mode', requireAuth, async (req, res) => {
     const ok = await sendCommand(req.params.did, req.session.token, { attrs: { mode } });
     res.json({ success: ok });
   } catch (err) {
-    if (err.status === 401) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
+    if (err.status === 401) {
+      const ok = await refreshTokenIfNeeded(req);
+      if (!ok) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
+      return res.status(503).json({ error: 'Token renouvele, reessayez' });
+    }
     res.status(500).json({ error: 'Erreur changement de mode' });
   }
 });
@@ -197,7 +238,11 @@ app.post(BASE_PATH + 'api/mode-all', requireAuth, async (req, res) => {
     const result = await sendModeToAll(devices, req.session.token, mode);
     res.json({ success: true, ...result });
   } catch (err) {
-    if (err.status === 401) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
+    if (err.status === 401) {
+      const ok = await refreshTokenIfNeeded(req);
+      if (!ok) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
+      return res.status(503).json({ error: 'Token renouvele, reessayez' });
+    }
     res.status(500).json({ error: 'Erreur mode global' });
   }
 });
@@ -211,7 +256,11 @@ app.post(BASE_PATH + 'api/timer-all', requireAuth, async (req, res) => {
     const result = await sendToAll(devices, req.session.token, () => ({ attrs: { timer_switch: enabled ? 1 : 0 } }));
     res.json({ success: true, ...result });
   } catch (err) {
-    if (err.status === 401) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
+    if (err.status === 401) {
+      const ok = await refreshTokenIfNeeded(req);
+      if (!ok) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
+      return res.status(503).json({ error: 'Token renouvele, reessayez' });
+    }
     res.status(500).json({ error: 'Erreur programme global' });
   }
 });
@@ -223,7 +272,11 @@ app.post(BASE_PATH + 'api/devices/:did/timer', requireAuth, async (req, res) => 
     const ok = await sendCommand(req.params.did, req.session.token, { attrs: { timer_switch: enabled ? 1 : 0 } });
     res.json({ success: ok });
   } catch (err) {
-    if (err.status === 401) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
+    if (err.status === 401) {
+      const ok = await refreshTokenIfNeeded(req);
+      if (!ok) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
+      return res.status(503).json({ error: 'Token renouvele, reessayez' });
+    }
     res.status(500).json({ error: 'Erreur planning' });
   }
 });
@@ -235,7 +288,11 @@ app.post(BASE_PATH + 'api/devices/:did/lock', requireAuth, async (req, res) => {
     const ok = await sendCommand(req.params.did, req.session.token, { attrs: { lock_switch: enabled ? 1 : 0 } });
     res.json({ success: ok });
   } catch (err) {
-    if (err.status === 401) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
+    if (err.status === 401) {
+      const ok = await refreshTokenIfNeeded(req);
+      if (!ok) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
+      return res.status(503).json({ error: 'Token renouvele, reessayez' });
+    }
     res.status(500).json({ error: 'Erreur verrouillage' });
   }
 });
@@ -253,7 +310,11 @@ app.post(BASE_PATH + 'api/devices/:did/boost', requireAuth, async (req, res) => 
     const ok = await sendCommand(req.params.did, req.session.token, payload);
     res.json({ success: ok });
   } catch (err) {
-    if (err.status === 401) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
+    if (err.status === 401) {
+      const ok = await refreshTokenIfNeeded(req);
+      if (!ok) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
+      return res.status(503).json({ error: 'Token renouvele, reessayez' });
+    }
     res.status(500).json({ error: 'Erreur boost' });
   }
 });
