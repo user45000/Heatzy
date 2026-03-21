@@ -377,7 +377,12 @@ document.getElementById('programme-on-btn').addEventListener('click', async () =
   try {
     const result = await api('POST', 'timer-all', { enabled: true });
     toast(`Programme active — ${result.succeeded}/${result.total} appareils`, 'success');
-    await loadDevices();
+    // Mise a jour optimiste
+    devices.forEach(d => {
+      if (deviceStatuses[d.did]) deviceStatuses[d.did].timer_switch = 1;
+    });
+    renderDevices();
+    delayedRefresh();
   } catch (err) {
     toast('Erreur: ' + err.message, 'error');
   }
@@ -387,7 +392,11 @@ document.getElementById('programme-off-btn').addEventListener('click', async () 
   try {
     const result = await api('POST', 'timer-all', { enabled: false });
     toast(`Programme desactive — ${result.succeeded}/${result.total} appareils`, 'success');
-    await loadDevices();
+    devices.forEach(d => {
+      if (deviceStatuses[d.did]) deviceStatuses[d.did].timer_switch = 0;
+    });
+    renderDevices();
+    delayedRefresh();
   } catch (err) {
     toast('Erreur: ' + err.message, 'error');
   }
@@ -400,12 +409,24 @@ document.querySelectorAll('.control-buttons .btn-mode').forEach(btn => {
     try {
       const result = await api('POST', 'mode-all', { mode });
       toast(`Tous en ${MODE_LABELS[mode]} — ${result.succeeded}/${result.total}`, 'success');
-      await loadDevices();
+      // Mise a jour optimiste
+      devices.forEach(d => {
+        if (deviceStatuses[d.did]) deviceStatuses[d.did].mode = mode;
+      });
+      renderDevices();
+      delayedRefresh();
     } catch (err) {
       toast('Erreur: ' + err.message, 'error');
     }
   });
 });
+
+// Refresh silencieux apres un delai (laisse le temps a l'API de propager)
+let refreshTimer;
+function delayedRefresh() {
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(() => loadDevices(), 3000);
+}
 
 // --- Refresh ---
 document.getElementById('refresh-btn').addEventListener('click', async () => {

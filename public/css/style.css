@@ -212,8 +212,8 @@ body {
 }
 
 .device-grid {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 10px;
 }
 
@@ -226,9 +226,6 @@ body {
   border: 1px solid var(--border);
   position: relative;
   overflow: hidden;
-  flex: 1 1 280px;
-  max-width: 400px;
-  min-width: 260px;
 }
 .device-card:hover { background: var(--bg-card-hover); border-color: rgba(255,255,255,0.1); }
 
@@ -427,7 +424,7 @@ body {
 
 /* ==================== MOBILE ==================== */
 @media (max-width: 600px) {
-  .device-card { flex: 1 1 100%; max-width: none; min-width: 0; }
+  .device-grid { grid-template-columns: 1fr; }
   .device-container { padding: 16px 12px; }
   .global-controls { padding: 12px; gap: 10px; }
   .control-divider { display: none; }
