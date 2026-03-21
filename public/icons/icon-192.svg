@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <rect width="192" height="192" rx="32" fill="#1a1a2e"/>
+  <g transform="translate(96,96)">
+    <!-- Flame -->
+    <path d="M0-55 C-20-30 -35-5 -35 15 C-35 35 -20 50 0 55 C20 50 35 35 35 15 C35-5 20-30 0-55Z" fill="#e94560" opacity="0.9"/>
+    <path d="M0-30 C-12-15 -20 0 -20 12 C-20 25 -12 32 0 35 C12 32 20 25 20 12 C20 0 12-15 0-30Z" fill="#ff6b6b" opacity="0.8"/>
+    <path d="M0-10 C-6-2 -10 5 -10 10 C-10 16 -6 20 0 22 C6 20 10 16 10 10 C10 5 6-2 0-10Z" fill="#ffd93d" opacity="0.9"/>
+  </g>
+</svg>

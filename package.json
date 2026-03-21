@@ -1,0 +1,17 @@
+{
+  "name": "heatzy",
+  "version": "1.0.0",
+  "description": "Interface web Heatzy - Contrôle des radiateurs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.2.1",
+    "express-session": "^1.19.0"
+  }
+}
