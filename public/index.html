@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#e94560">
+  <meta name="theme-color" content="#1a1a2e">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="description" content="Contrôle des radiateurs Heatzy">
@@ -17,13 +17,15 @@
   <!-- Login -->
   <div id="login-screen" class="screen">
     <div class="login-card">
-      <div class="login-icon">🔥</div>
-      <h1>Heatzy Web</h1>
+      <div class="login-icon">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#e94560" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c-4 4-7 8-7 12a7 7 0 0 0 14 0c0-4-3-8-7-12z"/><path d="M12 8c-2 2.5-3.5 5-3.5 7a3.5 3.5 0 0 0 7 0c0-2-1.5-4.5-3.5-7z" fill="#e94560" opacity="0.3"/></svg>
+      </div>
+      <h1>Heatzy</h1>
       <p class="login-subtitle">Connectez-vous avec votre compte Heatzy</p>
       <form id="login-form">
         <div class="field">
           <label for="email">Email</label>
-          <input type="email" id="email" autocomplete="email" required>
+          <input type="email" id="email" autocomplete="email" required placeholder="votre@email.com">
         </div>
         <div class="field">
           <label for="password">Mot de passe</label>
@@ -40,42 +42,43 @@
   <!-- Dashboard -->
   <div id="dashboard-screen" class="screen" hidden>
     <header class="app-header">
-      <h1>Heatzy</h1>
+      <div class="header-left">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#e94560" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c-4 4-7 8-7 12a7 7 0 0 0 14 0c0-4-3-8-7-12z"/></svg>
+        <h1>Heatzy</h1>
+      </div>
       <div class="header-actions">
         <button class="btn-icon" id="refresh-btn" title="Actualiser">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
         </button>
-        <button class="btn-icon" id="logout-btn" title="Déconnexion">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <button class="btn-icon" id="logout-btn" title="Deconnexion">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         </button>
       </div>
     </header>
 
-    <!-- Programme global bar -->
-    <div class="programme-bar">
-      <button class="btn btn-programme-on" id="programme-on-btn">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        Programme ON — Tous
-      </button>
-      <button class="btn btn-programme-off" id="programme-off-btn">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-        Programme OFF — Tous
-      </button>
-    </div>
-
-    <!-- Quick mode bar -->
-    <div class="quick-bar">
-      <span class="quick-label">Tout passer en :</span>
-      <div class="quick-buttons">
-        <button class="btn btn-mode btn-cft" data-mode="cft">Confort</button>
-        <button class="btn btn-mode btn-eco" data-mode="eco">Eco</button>
-        <button class="btn btn-mode btn-fro" data-mode="fro">Hors-gel</button>
-        <button class="btn btn-mode btn-stop" data-mode="stop">Off</button>
+    <!-- Global controls -->
+    <div class="global-controls">
+      <div class="control-section">
+        <span class="control-label">Tous les radiateurs</span>
+        <div class="control-buttons">
+          <button class="btn btn-mode btn-cft" data-mode="cft">Confort</button>
+          <button class="btn btn-mode btn-eco" data-mode="eco">Eco</button>
+          <button class="btn btn-mode btn-fro" data-mode="fro">Hors-gel</button>
+          <button class="btn btn-mode btn-stop" data-mode="stop">Off</button>
+        </div>
+      </div>
+      <div class="control-divider"></div>
+      <div class="control-section">
+        <span class="control-label">Programme</span>
+        <div class="control-buttons">
+          <button class="btn btn-prog btn-prog-on" id="programme-on-btn">Activer tout</button>
+          <button class="btn btn-prog btn-prog-off" id="programme-off-btn">Desactiver tout</button>
+        </div>
       </div>
     </div>
 
     <!-- Device list -->
-    <div id="devices" class="device-grid"></div>
+    <div id="devices" class="device-container"></div>
 
     <!-- Loading -->
     <div id="loading" class="loading" hidden>

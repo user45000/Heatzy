@@ -2,11 +2,9 @@
 const BASE = document.querySelector('link[rel="manifest"]').href.replace('manifest.json', '');
 
 const MODE_LABELS = {
-  cft: 'Confort', eco: 'Éco', fro: 'Hors-gel', stop: 'Off',
+  cft: 'Confort', eco: 'Eco', fro: 'Hors-gel', stop: 'Off',
   cft1: 'Confort -1', cft2: 'Confort -2'
 };
-
-const DEROG_LABELS = { 0: null, 1: 'Vacances', 2: 'Boost', 3: 'Présence' };
 
 let devices = [];
 let deviceStatuses = {};
@@ -24,7 +22,7 @@ async function api(method, path, body) {
 
   if (res.status === 401) {
     showLogin();
-    throw new Error('Session expirée');
+    throw new Error('Session expiree');
   }
   if (!res.ok) throw new Error(data.error || 'Erreur');
   return data;
@@ -34,11 +32,8 @@ async function api(method, path, body) {
 async function checkAuth() {
   try {
     const { authenticated } = await api('GET', 'auth');
-    if (authenticated) {
-      showDashboard();
-    } else {
-      showLogin();
-    }
+    if (authenticated) showDashboard();
+    else showLogin();
   } catch {
     showLogin();
   }
@@ -92,7 +87,6 @@ async function loadDevices() {
 
   try {
     devices = await api('GET', 'devices');
-    // Fetch all statuses in parallel
     const statuses = await Promise.allSettled(
       devices.map(d => api('GET', `devices/${d.did}/status`))
     );
@@ -108,74 +102,130 @@ async function loadDevices() {
   }
 }
 
-function renderDevices() {
-  const grid = document.getElementById('devices');
-  grid.innerHTML = devices.map(d => {
-    const status = deviceStatuses[d.did] || {};
-    const mode = status.mode || 'stop';
-    const derogMode = status.derog_mode || 0;
-    const derogTime = status.derog_time || 0;
-    const timerOn = status.timer_switch === 1;
-    const lockOn = status.lock_switch === 1;
+// --- Grouping ---
+function groupDevices(deviceList) {
+  const groups = {};
+  for (const d of deviceList) {
+    // Grouper par le nom avant le dernier tiret/espace+chiffre, sinon nom complet
+    const name = d.name || 'Sans nom';
+    let groupName = name;
 
-    let derogBadge = '';
-    if (derogMode === 1) {
-      derogBadge = `<div class="derog-badge derog-vacation">Vacances — ${derogTime}j restants</div>`;
-    } else if (derogMode === 2) {
-      derogBadge = `<div class="derog-badge derog-boost">Boost — ${derogTime}min</div>`;
+    // Essayer de trouver un prefixe de groupe
+    // "Salon - Rad 1" → "Salon"
+    // "Chambre Parents" → "Chambre Parents"
+    // "SDB Haut" → "SDB Haut"
+    const dashMatch = name.match(/^(.+?)\s*[-–]\s*.+$/);
+    if (dashMatch) {
+      groupName = dashMatch[1].trim();
     }
 
-    const modes = ['cft', 'eco', 'fro', 'stop'];
+    if (!groups[groupName]) groups[groupName] = [];
+    groups[groupName].push(d);
+  }
+  return groups;
+}
 
-    return `
-      <div class="device-card" data-did="${d.did}" data-v1="${d.is_v1}">
-        <div class="device-header">
-          <div class="device-name">
-            <span class="online-dot ${d.is_online ? '' : 'offline'}"></span>
-            ${escapeHtml(d.name)}
-          </div>
-          <div class="device-status">${d.is_online ? MODE_LABELS[mode] || mode : 'Hors ligne'}</div>
-        </div>
-        <div class="mode-buttons">
-          ${modes.map(m => `
-            <button class="mode-btn ${mode === m ? 'active-' + m : ''}"
-                    onclick="setMode('${d.did}', '${m}', ${d.is_v1})"
-                    ${!d.is_online ? 'disabled' : ''}>
-              ${MODE_LABELS[m]}
-            </button>
-          `).join('')}
-        </div>
-        ${derogBadge}
-        <div class="device-extras">
-          <button class="extra-btn ${timerOn ? 'active' : ''}"
-                  onclick="toggleTimer('${d.did}', ${!timerOn})"
-                  ${!d.is_online ? 'disabled' : ''}>
-            Planning ${timerOn ? 'ON' : 'OFF'}
-          </button>
-          <button class="extra-btn ${lockOn ? 'active' : ''}"
-                  onclick="toggleLock('${d.did}', ${!lockOn})"
-                  ${!d.is_online ? 'disabled' : ''}>
-            Verrou ${lockOn ? 'ON' : 'OFF'}
-          </button>
-          <button class="extra-btn"
-                  onclick="boostDevice('${d.did}', 60)"
-                  ${!d.is_online ? 'disabled' : ''}>
-            Boost 1h
-          </button>
-          <button class="extra-btn"
-                  onclick="boostDevice('${d.did}', 240)"
-                  ${!d.is_online ? 'disabled' : ''}>
-            Boost 4h
-          </button>
-          <button class="extra-btn"
-                  onclick="boostDevice('${d.did}', 480)"
-                  ${!d.is_online ? 'disabled' : ''}>
-            Boost 8h
-          </button>
-        </div>
+function renderDevices() {
+  const container = document.getElementById('devices');
+  const groups = groupDevices(devices);
+  const groupNames = Object.keys(groups).sort();
+  const isSingleGroup = groupNames.length === devices.length; // Pas de vrai groupement
+
+  if (isSingleGroup) {
+    // Pas de groupes detectes, afficher une grille simple
+    container.innerHTML = `
+      <div class="device-grid">
+        ${devices.map(d => renderDeviceCard(d)).join('')}
       </div>
     `;
-  }).join('');
+  } else {
+    container.innerHTML = groupNames.map(name => {
+      const devs = groups[name];
+      return `
+        <div class="device-group">
+          <div class="group-header">
+            <span class="group-name">${escapeHtml(name)}</span>
+            <span class="group-count">${devs.length}</span>
+          </div>
+          <div class="device-grid">
+            ${devs.map(d => renderDeviceCard(d)).join('')}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+}
+
+function renderDeviceCard(d) {
+  const status = deviceStatuses[d.did] || {};
+  const mode = status.mode || 'stop';
+  const derogMode = status.derog_mode || 0;
+  const derogTime = status.derog_time || 0;
+  const timerOn = status.timer_switch === 1;
+  const lockOn = status.lock_switch === 1;
+
+  let derogBadge = '';
+  if (derogMode === 2) {
+    derogBadge = `<div class="derog-badge derog-boost">Boost ${derogTime}min</div>`;
+  }
+
+  const modeClass = d.is_online ? `mode-${mode}` : 'mode-stop';
+  const labelClass = d.is_online ? `label-${mode}` : 'label-offline';
+  const labelText = d.is_online ? (MODE_LABELS[mode] || mode) : 'Hors ligne';
+
+  const modes = ['cft', 'eco', 'fro', 'stop'];
+
+  // Nom affiche = nom complet ou partie apres le tiret si groupe
+  const displayName = d.name || 'Sans nom';
+
+  return `
+    <div class="device-card ${modeClass}" data-did="${d.did}">
+      <div class="device-header">
+        <div class="device-name">
+          <span class="online-dot ${d.is_online ? '' : 'offline'}"></span>
+          ${escapeHtml(displayName)}
+        </div>
+        <span class="device-mode-label ${labelClass}">${labelText}</span>
+      </div>
+      <div class="mode-buttons">
+        ${modes.map(m => `
+          <button class="mode-btn ${mode === m ? 'active-' + m : ''}"
+                  onclick="setMode('${d.did}', '${m}', ${d.is_v1})"
+                  ${!d.is_online ? 'disabled' : ''}>
+            ${MODE_LABELS[m]}
+          </button>
+        `).join('')}
+      </div>
+      ${derogBadge}
+      <div class="device-extras">
+        <button class="extra-btn ${timerOn ? 'active' : ''}"
+                onclick="toggleTimer('${d.did}', ${!timerOn})"
+                ${!d.is_online ? 'disabled' : ''}>
+          Programme ${timerOn ? 'ON' : 'OFF'}
+        </button>
+        <button class="extra-btn ${lockOn ? 'active' : ''}"
+                onclick="toggleLock('${d.did}', ${!lockOn})"
+                ${!d.is_online ? 'disabled' : ''}>
+          Verrou ${lockOn ? 'ON' : 'OFF'}
+        </button>
+        <button class="extra-btn"
+                onclick="boostDevice('${d.did}', 60)"
+                ${!d.is_online ? 'disabled' : ''}>
+          Boost 1h
+        </button>
+        <button class="extra-btn"
+                onclick="boostDevice('${d.did}', 240)"
+                ${!d.is_online ? 'disabled' : ''}>
+          Boost 4h
+        </button>
+        <button class="extra-btn"
+                onclick="boostDevice('${d.did}', 480)"
+                ${!d.is_online ? 'disabled' : ''}>
+          Boost 8h
+        </button>
+      </div>
+    </div>
+  `;
 }
 
 // --- Actions ---
@@ -183,7 +233,6 @@ async function setMode(did, mode, isV1) {
   try {
     await api('POST', `devices/${did}/mode`, { mode, is_v1: isV1 });
     toast(`${getDeviceName(did)} → ${MODE_LABELS[mode]}`, 'success');
-    // Update local status
     if (deviceStatuses[did]) deviceStatuses[did].mode = mode;
     renderDevices();
   } catch (err) {
@@ -195,7 +244,7 @@ window.setMode = setMode;
 async function toggleTimer(did, enabled) {
   try {
     await api('POST', `devices/${did}/timer`, { enabled });
-    toast(`${getDeviceName(did)} — Planning ${enabled ? 'activé' : 'désactivé'}`, 'success');
+    toast(`${getDeviceName(did)} — Programme ${enabled ? 'active' : 'desactive'}`, 'success');
     if (deviceStatuses[did]) deviceStatuses[did].timer_switch = enabled ? 1 : 0;
     renderDevices();
   } catch (err) {
@@ -207,7 +256,7 @@ window.toggleTimer = toggleTimer;
 async function toggleLock(did, enabled) {
   try {
     await api('POST', `devices/${did}/lock`, { enabled });
-    toast(`${getDeviceName(did)} — Verrou ${enabled ? 'activé' : 'désactivé'}`, 'success');
+    toast(`${getDeviceName(did)} — Verrou ${enabled ? 'active' : 'desactive'}`, 'success');
     if (deviceStatuses[did]) deviceStatuses[did].lock_switch = enabled ? 1 : 0;
     renderDevices();
   } catch (err) {
@@ -220,7 +269,7 @@ async function boostDevice(did, minutes = 60) {
   try {
     await api('POST', `devices/${did}/boost`, { minutes });
     const label = minutes >= 60 ? `${minutes / 60}h` : `${minutes}min`;
-    toast(`${getDeviceName(did)} — Boost ${label} activé`, 'success');
+    toast(`${getDeviceName(did)} — Boost ${label} active`, 'success');
     if (deviceStatuses[did]) { deviceStatuses[did].derog_mode = 2; deviceStatuses[did].derog_time = minutes; }
     renderDevices();
   } catch (err) {
@@ -233,7 +282,7 @@ window.boostDevice = boostDevice;
 document.getElementById('programme-on-btn').addEventListener('click', async () => {
   try {
     const result = await api('POST', 'timer-all', { enabled: true });
-    toast(`Programme activé — ${result.succeeded}/${result.total} appareils`, 'success');
+    toast(`Programme active — ${result.succeeded}/${result.total} appareils`, 'success');
     await loadDevices();
   } catch (err) {
     toast('Erreur: ' + err.message, 'error');
@@ -243,7 +292,7 @@ document.getElementById('programme-on-btn').addEventListener('click', async () =
 document.getElementById('programme-off-btn').addEventListener('click', async () => {
   try {
     const result = await api('POST', 'timer-all', { enabled: false });
-    toast(`Programme désactivé — ${result.succeeded}/${result.total} appareils`, 'success');
+    toast(`Programme desactive — ${result.succeeded}/${result.total} appareils`, 'success');
     await loadDevices();
   } catch (err) {
     toast('Erreur: ' + err.message, 'error');
@@ -251,7 +300,7 @@ document.getElementById('programme-off-btn').addEventListener('click', async () 
 });
 
 // --- Quick mode all ---
-document.querySelectorAll('.quick-buttons .btn-mode').forEach(btn => {
+document.querySelectorAll('.control-buttons .btn-mode').forEach(btn => {
   btn.addEventListener('click', async () => {
     const mode = btn.dataset.mode;
     try {
