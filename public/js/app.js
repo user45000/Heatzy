@@ -164,8 +164,8 @@ function renderSingleCard(d) {
     derogBadge = `<div class="derog-badge derog-boost">Boost ${derogTime}min</div>`;
   }
 
-  const dids = JSON.stringify([d.did]);
-  const isV1s = JSON.stringify([d.is_v1]);
+  const dids = [d.did];
+  const isV1s = [d.is_v1];
 
   return `
     <div class="device-card ${modeClass}">
@@ -213,8 +213,8 @@ function renderGroupCard(card) {
   const lockCount = statuses.filter(s => s.lock_switch === 1).length;
   const lockOn = lockCount > statuses.length / 2;
 
-  const dids = JSON.stringify(devs.map(d => d.did));
-  const isV1s = JSON.stringify(devs.map(d => d.is_v1));
+  const dids = devs.map(d => d.did);
+  const isV1s = devs.map(d => d.is_v1);
 
   // Sous-noms des appareils du groupe
   const subNames = devs.map(d => {
@@ -243,14 +243,23 @@ function renderGroupCard(card) {
   `;
 }
 
+// Encode JSON en base64 pour injection sure dans les attributs HTML
+function b64(obj) {
+  return btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
+}
+function unb64(str) {
+  return JSON.parse(decodeURIComponent(escape(atob(str))));
+}
+
 // Boutons de mode (partages entre single et group)
-function renderModeButtons(didsJson, isV1sJson, activeMode, online) {
+function renderModeButtons(dids, isV1s, activeMode, online) {
+  const encoded = b64({ dids, isV1s });
   const modes = ['cft', 'eco', 'fro', 'stop'];
   return `
     <div class="mode-buttons">
       ${modes.map(m => `
         <button class="mode-btn ${activeMode === m ? 'active-' + m : ''}"
-                onclick="setModeMulti('${encAttr(didsJson)}', '${encAttr(isV1sJson)}', '${m}')"
+                data-action="mode" data-targets="${encoded}" data-mode="${m}"
                 ${!online ? 'disabled' : ''}>
           ${MODE_LABELS[m]}
         </button>
@@ -260,31 +269,32 @@ function renderModeButtons(didsJson, isV1sJson, activeMode, online) {
 }
 
 // Boutons extras (programme, verrou, boost)
-function renderExtras(didsJson, timerOn, lockOn, online) {
+function renderExtras(dids, timerOn, lockOn, online) {
+  const encoded = b64({ dids });
   return `
     <div class="device-extras">
       <button class="extra-btn ${timerOn ? 'active' : ''}"
-              onclick="toggleTimerMulti('${encAttr(didsJson)}', ${!timerOn})"
+              data-action="timer" data-targets="${encoded}" data-enabled="${!timerOn}"
               ${!online ? 'disabled' : ''}>
         Programme ${timerOn ? 'ON' : 'OFF'}
       </button>
       <button class="extra-btn ${lockOn ? 'active' : ''}"
-              onclick="toggleLockMulti('${encAttr(didsJson)}', ${!lockOn})"
+              data-action="lock" data-targets="${encoded}" data-enabled="${!lockOn}"
               ${!online ? 'disabled' : ''}>
         Verrou ${lockOn ? 'ON' : 'OFF'}
       </button>
       <button class="extra-btn"
-              onclick="boostMulti('${encAttr(didsJson)}', 60)"
+              data-action="boost" data-targets="${encoded}" data-minutes="60"
               ${!online ? 'disabled' : ''}>
         Boost 1h
       </button>
       <button class="extra-btn"
-              onclick="boostMulti('${encAttr(didsJson)}', 240)"
+              data-action="boost" data-targets="${encoded}" data-minutes="240"
               ${!online ? 'disabled' : ''}>
         Boost 4h
       </button>
       <button class="extra-btn"
-              onclick="boostMulti('${encAttr(didsJson)}', 480)"
+              data-action="boost" data-targets="${encoded}" data-minutes="480"
               ${!online ? 'disabled' : ''}>
         Boost 8h
       </button>
@@ -292,85 +302,64 @@ function renderExtras(didsJson, timerOn, lockOn, online) {
   `;
 }
 
-// Encode JSON pour attributs HTML (evite les problemes de quotes)
-function encAttr(jsonStr) {
-  return jsonStr.replace(/'/g, '&#39;');
-}
+// --- Event delegation pour toutes les actions sur les cartes ---
+document.getElementById('devices').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn || btn.disabled) return;
 
-// --- Actions multi-appareils ---
-async function setModeMulti(didsJson, isV1sJson, mode) {
-  const dids = JSON.parse(didsJson);
-  const isV1s = JSON.parse(isV1sJson);
+  const action = btn.dataset.action;
+  const { dids, isV1s } = unb64(btn.dataset.targets);
+  const label = dids.length === 1 ? getDeviceName(dids[0]) : `${dids.length} appareils`;
+
   try {
-    await Promise.all(dids.map((did, i) =>
-      api('POST', `devices/${did}/mode`, { mode, is_v1: isV1s[i] })
-    ));
-    const name = dids.length === 1 ? getDeviceName(dids[0]) : `${dids.length} appareils`;
-    toast(`${name} → ${MODE_LABELS[mode]}`, 'success');
-    dids.forEach(did => {
-      if (deviceStatuses[did]) deviceStatuses[did].mode = mode;
-    });
+    if (action === 'mode') {
+      const mode = btn.dataset.mode;
+      await Promise.all(dids.map((did, i) =>
+        api('POST', `devices/${did}/mode`, { mode, is_v1: isV1s ? isV1s[i] : false })
+      ));
+      toast(`${label} → ${MODE_LABELS[mode]}`, 'success');
+      dids.forEach(did => {
+        if (deviceStatuses[did]) deviceStatuses[did].mode = mode;
+      });
+
+    } else if (action === 'timer') {
+      const enabled = btn.dataset.enabled === 'true';
+      await Promise.all(dids.map(did =>
+        api('POST', `devices/${did}/timer`, { enabled })
+      ));
+      toast(`${label} — Programme ${enabled ? 'active' : 'desactive'}`, 'success');
+      dids.forEach(did => {
+        if (deviceStatuses[did]) deviceStatuses[did].timer_switch = enabled ? 1 : 0;
+      });
+
+    } else if (action === 'lock') {
+      const enabled = btn.dataset.enabled === 'true';
+      await Promise.all(dids.map(did =>
+        api('POST', `devices/${did}/lock`, { enabled })
+      ));
+      toast(`${label} — Verrou ${enabled ? 'active' : 'desactive'}`, 'success');
+      dids.forEach(did => {
+        if (deviceStatuses[did]) deviceStatuses[did].lock_switch = enabled ? 1 : 0;
+      });
+
+    } else if (action === 'boost') {
+      const minutes = parseInt(btn.dataset.minutes);
+      await Promise.all(dids.map(did =>
+        api('POST', `devices/${did}/boost`, { minutes })
+      ));
+      const dur = minutes >= 60 ? `${minutes / 60}h` : `${minutes}min`;
+      toast(`${label} — Boost ${dur} active`, 'success');
+      dids.forEach(did => {
+        if (deviceStatuses[did]) { deviceStatuses[did].derog_mode = 2; deviceStatuses[did].derog_time = minutes; }
+      });
+    }
+
     renderDevices();
+    delayedRefresh();
   } catch (err) {
     toast('Erreur: ' + err.message, 'error');
   }
-}
-window.setModeMulti = setModeMulti;
-
-async function toggleTimerMulti(didsJson, enabled) {
-  const dids = JSON.parse(didsJson);
-  try {
-    await Promise.all(dids.map(did =>
-      api('POST', `devices/${did}/timer`, { enabled })
-    ));
-    const name = dids.length === 1 ? getDeviceName(dids[0]) : `${dids.length} appareils`;
-    toast(`${name} — Programme ${enabled ? 'active' : 'desactive'}`, 'success');
-    dids.forEach(did => {
-      if (deviceStatuses[did]) deviceStatuses[did].timer_switch = enabled ? 1 : 0;
-    });
-    renderDevices();
-  } catch (err) {
-    toast('Erreur: ' + err.message, 'error');
-  }
-}
-window.toggleTimerMulti = toggleTimerMulti;
-
-async function toggleLockMulti(didsJson, enabled) {
-  const dids = JSON.parse(didsJson);
-  try {
-    await Promise.all(dids.map(did =>
-      api('POST', `devices/${did}/lock`, { enabled })
-    ));
-    const name = dids.length === 1 ? getDeviceName(dids[0]) : `${dids.length} appareils`;
-    toast(`${name} — Verrou ${enabled ? 'active' : 'desactive'}`, 'success');
-    dids.forEach(did => {
-      if (deviceStatuses[did]) deviceStatuses[did].lock_switch = enabled ? 1 : 0;
-    });
-    renderDevices();
-  } catch (err) {
-    toast('Erreur: ' + err.message, 'error');
-  }
-}
-window.toggleLockMulti = toggleLockMulti;
-
-async function boostMulti(didsJson, minutes) {
-  const dids = JSON.parse(didsJson);
-  try {
-    await Promise.all(dids.map(did =>
-      api('POST', `devices/${did}/boost`, { minutes })
-    ));
-    const label = minutes >= 60 ? `${minutes / 60}h` : `${minutes}min`;
-    const name = dids.length === 1 ? getDeviceName(dids[0]) : `${dids.length} appareils`;
-    toast(`${name} — Boost ${label} active`, 'success');
-    dids.forEach(did => {
-      if (deviceStatuses[did]) { deviceStatuses[did].derog_mode = 2; deviceStatuses[did].derog_time = minutes; }
-    });
-    renderDevices();
-  } catch (err) {
-    toast('Erreur: ' + err.message, 'error');
-  }
-}
-window.boostMulti = boostMulti;
+});
 
 // --- Programme global ON/OFF ---
 document.getElementById('programme-on-btn').addEventListener('click', async () => {
