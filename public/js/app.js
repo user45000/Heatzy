@@ -468,11 +468,17 @@ document.querySelectorAll('.control-buttons .btn-mode').forEach(btn => {
       const result = await api('POST', 'mode-all', { mode });
       devices.forEach(d => { if (deviceStatuses[d.did]) deviceStatuses[d.did].mode = mode; });
       renderDevices();
-      // Flash toutes les cartes
       const allDids = devices.map(d => d.did);
       flashCards(allDids, mode);
-      toast(`Tous en ${MODE_LABELS[mode]} — ${result.succeeded}/${result.total}`, 'success');
-      delayedRefresh(5000);
+      let msg = `Tous en ${MODE_LABELS[mode]} — ${result.succeeded}/${result.total}`;
+      if (result.retried > 0) msg += ` (${result.retried} renvoyes)`;
+      if (result.failed > 0) {
+        toast(msg + ` — ${result.failed} en echec`, 'error');
+      } else {
+        toast(msg, 'success');
+      }
+      // Refresh rapide pour montrer le vrai etat
+      delayedRefresh(2000);
     } catch (err) {
       toast('Erreur: ' + err.message, 'error');
     } finally {
