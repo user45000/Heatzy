@@ -103,180 +103,274 @@ async function loadDevices() {
 }
 
 // --- Grouping ---
-function groupDevices(deviceList) {
+// Regroupe les appareils par prefixe avant le tiret
+// "Salon - Rad 1" et "Salon - Rad 2" → groupe "Salon" avec 2 appareils
+// "Bureau" seul → carte individuelle "Bureau"
+function buildCards() {
   const groups = {};
-  for (const d of deviceList) {
-    // Grouper par le nom avant le dernier tiret/espace+chiffre, sinon nom complet
+  const order = [];
+  for (const d of devices) {
     const name = d.name || 'Sans nom';
-    let groupName = name;
+    const dashMatch = name.match(/^(.+?)\s*[-–]\s*(.+)$/);
+    const groupName = dashMatch ? dashMatch[1].trim() : name;
 
-    // Essayer de trouver un prefixe de groupe
-    // "Salon - Rad 1" → "Salon"
-    // "Chambre Parents" → "Chambre Parents"
-    // "SDB Haut" → "SDB Haut"
-    const dashMatch = name.match(/^(.+?)\s*[-–]\s*.+$/);
-    if (dashMatch) {
-      groupName = dashMatch[1].trim();
+    if (!groups[groupName]) {
+      groups[groupName] = [];
+      order.push(groupName);
     }
-
-    if (!groups[groupName]) groups[groupName] = [];
     groups[groupName].push(d);
   }
-  return groups;
+
+  // Construire les cartes : groupe (>1 device) ou individuel
+  return order.map(name => {
+    const devs = groups[name];
+    if (devs.length === 1) {
+      return { type: 'single', name: devs[0].name, devices: devs };
+    }
+    return { type: 'group', name, devices: devs };
+  });
 }
 
 function renderDevices() {
   const container = document.getElementById('devices');
-  const groups = groupDevices(devices);
-  const groupNames = Object.keys(groups).sort();
-  const isSingleGroup = groupNames.length === devices.length; // Pas de vrai groupement
+  const cards = buildCards();
 
-  if (isSingleGroup) {
-    // Pas de groupes detectes, afficher une grille simple
-    container.innerHTML = `
-      <div class="device-grid">
-        ${devices.map(d => renderDeviceCard(d)).join('')}
-      </div>
-    `;
-  } else {
-    container.innerHTML = groupNames.map(name => {
-      const devs = groups[name];
-      return `
-        <div class="device-group">
-          <div class="group-header">
-            <span class="group-name">${escapeHtml(name)}</span>
-            <span class="group-count">${devs.length}</span>
-          </div>
-          <div class="device-grid">
-            ${devs.map(d => renderDeviceCard(d)).join('')}
-          </div>
-        </div>
-      `;
-    }).join('');
-  }
+  container.innerHTML = `<div class="device-grid">
+    ${cards.map(card => {
+      if (card.type === 'single') {
+        return renderSingleCard(card.devices[0]);
+      }
+      return renderGroupCard(card);
+    }).join('')}
+  </div>`;
 }
 
-function renderDeviceCard(d) {
+// Carte individuelle
+function renderSingleCard(d) {
   const status = deviceStatuses[d.did] || {};
   const mode = status.mode || 'stop';
   const derogMode = status.derog_mode || 0;
   const derogTime = status.derog_time || 0;
   const timerOn = status.timer_switch === 1;
   const lockOn = status.lock_switch === 1;
+  const online = d.is_online;
+
+  const modeClass = online ? `mode-${mode}` : 'mode-stop';
+  const labelClass = online ? `label-${mode}` : 'label-offline';
+  const labelText = online ? (MODE_LABELS[mode] || mode) : 'Hors ligne';
 
   let derogBadge = '';
   if (derogMode === 2) {
     derogBadge = `<div class="derog-badge derog-boost">Boost ${derogTime}min</div>`;
   }
 
-  const modeClass = d.is_online ? `mode-${mode}` : 'mode-stop';
-  const labelClass = d.is_online ? `label-${mode}` : 'label-offline';
-  const labelText = d.is_online ? (MODE_LABELS[mode] || mode) : 'Hors ligne';
-
-  const modes = ['cft', 'eco', 'fro', 'stop'];
-
-  // Nom affiche = nom complet ou partie apres le tiret si groupe
-  const displayName = d.name || 'Sans nom';
+  const dids = JSON.stringify([d.did]);
+  const isV1s = JSON.stringify([d.is_v1]);
 
   return `
-    <div class="device-card ${modeClass}" data-did="${d.did}">
+    <div class="device-card ${modeClass}">
       <div class="device-header">
         <div class="device-name">
-          <span class="online-dot ${d.is_online ? '' : 'offline'}"></span>
-          ${escapeHtml(displayName)}
+          <span class="online-dot ${online ? '' : 'offline'}"></span>
+          ${escapeHtml(d.name || 'Sans nom')}
         </div>
         <span class="device-mode-label ${labelClass}">${labelText}</span>
       </div>
-      <div class="mode-buttons">
-        ${modes.map(m => `
-          <button class="mode-btn ${mode === m ? 'active-' + m : ''}"
-                  onclick="setMode('${d.did}', '${m}', ${d.is_v1})"
-                  ${!d.is_online ? 'disabled' : ''}>
-            ${MODE_LABELS[m]}
-          </button>
-        `).join('')}
-      </div>
+      ${renderModeButtons(dids, isV1s, mode, online)}
       ${derogBadge}
-      <div class="device-extras">
-        <button class="extra-btn ${timerOn ? 'active' : ''}"
-                onclick="toggleTimer('${d.did}', ${!timerOn})"
-                ${!d.is_online ? 'disabled' : ''}>
-          Programme ${timerOn ? 'ON' : 'OFF'}
-        </button>
-        <button class="extra-btn ${lockOn ? 'active' : ''}"
-                onclick="toggleLock('${d.did}', ${!lockOn})"
-                ${!d.is_online ? 'disabled' : ''}>
-          Verrou ${lockOn ? 'ON' : 'OFF'}
-        </button>
-        <button class="extra-btn"
-                onclick="boostDevice('${d.did}', 60)"
-                ${!d.is_online ? 'disabled' : ''}>
-          Boost 1h
-        </button>
-        <button class="extra-btn"
-                onclick="boostDevice('${d.did}', 240)"
-                ${!d.is_online ? 'disabled' : ''}>
-          Boost 4h
-        </button>
-        <button class="extra-btn"
-                onclick="boostDevice('${d.did}', 480)"
-                ${!d.is_online ? 'disabled' : ''}>
-          Boost 8h
-        </button>
-      </div>
+      ${renderExtras(dids, timerOn, lockOn, online)}
     </div>
   `;
 }
 
-// --- Actions ---
-async function setMode(did, mode, isV1) {
+// Carte groupe (plusieurs appareils fusionnes)
+function renderGroupCard(card) {
+  const devs = card.devices;
+  const statuses = devs.map(d => deviceStatuses[d.did] || {});
+
+  // Mode dominant = le plus frequent parmi les appareils en ligne
+  const onlineDevs = devs.filter(d => d.is_online);
+  const anyOnline = onlineDevs.length > 0;
+
+  const modeCounts = {};
+  for (const d of onlineDevs) {
+    const m = (deviceStatuses[d.did] || {}).mode || 'stop';
+    modeCounts[m] = (modeCounts[m] || 0) + 1;
+  }
+  const dominantMode = Object.entries(modeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'stop';
+
+  // Tous dans le meme mode ?
+  const allSameMode = Object.keys(modeCounts).length <= 1;
+
+  const modeClass = anyOnline ? `mode-${dominantMode}` : 'mode-stop';
+  const labelClass = anyOnline ? `label-${dominantMode}` : 'label-offline';
+  let labelText = anyOnline ? (MODE_LABELS[dominantMode] || dominantMode) : 'Hors ligne';
+  if (anyOnline && !allSameMode) labelText = 'Mixte';
+
+  // Timer : tous ON, tous OFF, ou mixte
+  const timerCount = statuses.filter(s => s.timer_switch === 1).length;
+  const timerOn = timerCount > statuses.length / 2;
+  const lockCount = statuses.filter(s => s.lock_switch === 1).length;
+  const lockOn = lockCount > statuses.length / 2;
+
+  const dids = JSON.stringify(devs.map(d => d.did));
+  const isV1s = JSON.stringify(devs.map(d => d.is_v1));
+
+  // Sous-noms des appareils du groupe
+  const subNames = devs.map(d => {
+    const name = d.name || '';
+    const dashMatch = name.match(/^.+?\s*[-–]\s*(.+)$/);
+    const subName = dashMatch ? dashMatch[1].trim() : name;
+    const s = deviceStatuses[d.did] || {};
+    const m = s.mode || 'stop';
+    const dotClass = d.is_online ? '' : 'offline';
+    return `<span class="sub-device"><span class="online-dot-sm ${dotClass}"></span>${escapeHtml(subName)}</span>`;
+  }).join('');
+
+  return `
+    <div class="device-card ${modeClass}">
+      <div class="device-header">
+        <div class="device-name">
+          ${escapeHtml(card.name)}
+          <span class="device-count">${devs.length}</span>
+        </div>
+        <span class="device-mode-label ${labelClass}">${labelText}</span>
+      </div>
+      <div class="sub-devices">${subNames}</div>
+      ${renderModeButtons(dids, isV1s, allSameMode ? dominantMode : null, anyOnline)}
+      ${renderExtras(dids, timerOn, lockOn, anyOnline)}
+    </div>
+  `;
+}
+
+// Boutons de mode (partages entre single et group)
+function renderModeButtons(didsJson, isV1sJson, activeMode, online) {
+  const modes = ['cft', 'eco', 'fro', 'stop'];
+  return `
+    <div class="mode-buttons">
+      ${modes.map(m => `
+        <button class="mode-btn ${activeMode === m ? 'active-' + m : ''}"
+                onclick="setModeMulti('${encAttr(didsJson)}', '${encAttr(isV1sJson)}', '${m}')"
+                ${!online ? 'disabled' : ''}>
+          ${MODE_LABELS[m]}
+        </button>
+      `).join('')}
+    </div>
+  `;
+}
+
+// Boutons extras (programme, verrou, boost)
+function renderExtras(didsJson, timerOn, lockOn, online) {
+  return `
+    <div class="device-extras">
+      <button class="extra-btn ${timerOn ? 'active' : ''}"
+              onclick="toggleTimerMulti('${encAttr(didsJson)}', ${!timerOn})"
+              ${!online ? 'disabled' : ''}>
+        Programme ${timerOn ? 'ON' : 'OFF'}
+      </button>
+      <button class="extra-btn ${lockOn ? 'active' : ''}"
+              onclick="toggleLockMulti('${encAttr(didsJson)}', ${!lockOn})"
+              ${!online ? 'disabled' : ''}>
+        Verrou ${lockOn ? 'ON' : 'OFF'}
+      </button>
+      <button class="extra-btn"
+              onclick="boostMulti('${encAttr(didsJson)}', 60)"
+              ${!online ? 'disabled' : ''}>
+        Boost 1h
+      </button>
+      <button class="extra-btn"
+              onclick="boostMulti('${encAttr(didsJson)}', 240)"
+              ${!online ? 'disabled' : ''}>
+        Boost 4h
+      </button>
+      <button class="extra-btn"
+              onclick="boostMulti('${encAttr(didsJson)}', 480)"
+              ${!online ? 'disabled' : ''}>
+        Boost 8h
+      </button>
+    </div>
+  `;
+}
+
+// Encode JSON pour attributs HTML (evite les problemes de quotes)
+function encAttr(jsonStr) {
+  return jsonStr.replace(/'/g, '&#39;');
+}
+
+// --- Actions multi-appareils ---
+async function setModeMulti(didsJson, isV1sJson, mode) {
+  const dids = JSON.parse(didsJson);
+  const isV1s = JSON.parse(isV1sJson);
   try {
-    await api('POST', `devices/${did}/mode`, { mode, is_v1: isV1 });
-    toast(`${getDeviceName(did)} → ${MODE_LABELS[mode]}`, 'success');
-    if (deviceStatuses[did]) deviceStatuses[did].mode = mode;
+    await Promise.all(dids.map((did, i) =>
+      api('POST', `devices/${did}/mode`, { mode, is_v1: isV1s[i] })
+    ));
+    const name = dids.length === 1 ? getDeviceName(dids[0]) : `${dids.length} appareils`;
+    toast(`${name} → ${MODE_LABELS[mode]}`, 'success');
+    dids.forEach(did => {
+      if (deviceStatuses[did]) deviceStatuses[did].mode = mode;
+    });
     renderDevices();
   } catch (err) {
     toast('Erreur: ' + err.message, 'error');
   }
 }
-window.setMode = setMode;
+window.setModeMulti = setModeMulti;
 
-async function toggleTimer(did, enabled) {
+async function toggleTimerMulti(didsJson, enabled) {
+  const dids = JSON.parse(didsJson);
   try {
-    await api('POST', `devices/${did}/timer`, { enabled });
-    toast(`${getDeviceName(did)} — Programme ${enabled ? 'active' : 'desactive'}`, 'success');
-    if (deviceStatuses[did]) deviceStatuses[did].timer_switch = enabled ? 1 : 0;
+    await Promise.all(dids.map(did =>
+      api('POST', `devices/${did}/timer`, { enabled })
+    ));
+    const name = dids.length === 1 ? getDeviceName(dids[0]) : `${dids.length} appareils`;
+    toast(`${name} — Programme ${enabled ? 'active' : 'desactive'}`, 'success');
+    dids.forEach(did => {
+      if (deviceStatuses[did]) deviceStatuses[did].timer_switch = enabled ? 1 : 0;
+    });
     renderDevices();
   } catch (err) {
     toast('Erreur: ' + err.message, 'error');
   }
 }
-window.toggleTimer = toggleTimer;
+window.toggleTimerMulti = toggleTimerMulti;
 
-async function toggleLock(did, enabled) {
+async function toggleLockMulti(didsJson, enabled) {
+  const dids = JSON.parse(didsJson);
   try {
-    await api('POST', `devices/${did}/lock`, { enabled });
-    toast(`${getDeviceName(did)} — Verrou ${enabled ? 'active' : 'desactive'}`, 'success');
-    if (deviceStatuses[did]) deviceStatuses[did].lock_switch = enabled ? 1 : 0;
+    await Promise.all(dids.map(did =>
+      api('POST', `devices/${did}/lock`, { enabled })
+    ));
+    const name = dids.length === 1 ? getDeviceName(dids[0]) : `${dids.length} appareils`;
+    toast(`${name} — Verrou ${enabled ? 'active' : 'desactive'}`, 'success');
+    dids.forEach(did => {
+      if (deviceStatuses[did]) deviceStatuses[did].lock_switch = enabled ? 1 : 0;
+    });
     renderDevices();
   } catch (err) {
     toast('Erreur: ' + err.message, 'error');
   }
 }
-window.toggleLock = toggleLock;
+window.toggleLockMulti = toggleLockMulti;
 
-async function boostDevice(did, minutes = 60) {
+async function boostMulti(didsJson, minutes) {
+  const dids = JSON.parse(didsJson);
   try {
-    await api('POST', `devices/${did}/boost`, { minutes });
+    await Promise.all(dids.map(did =>
+      api('POST', `devices/${did}/boost`, { minutes })
+    ));
     const label = minutes >= 60 ? `${minutes / 60}h` : `${minutes}min`;
-    toast(`${getDeviceName(did)} — Boost ${label} active`, 'success');
-    if (deviceStatuses[did]) { deviceStatuses[did].derog_mode = 2; deviceStatuses[did].derog_time = minutes; }
+    const name = dids.length === 1 ? getDeviceName(dids[0]) : `${dids.length} appareils`;
+    toast(`${name} — Boost ${label} active`, 'success');
+    dids.forEach(did => {
+      if (deviceStatuses[did]) { deviceStatuses[did].derog_mode = 2; deviceStatuses[did].derog_time = minutes; }
+    });
     renderDevices();
   } catch (err) {
     toast('Erreur: ' + err.message, 'error');
   }
 }
-window.boostDevice = boostDevice;
+window.boostMulti = boostMulti;
 
 // --- Programme global ON/OFF ---
 document.getElementById('programme-on-btn').addEventListener('click', async () => {

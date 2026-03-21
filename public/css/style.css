@@ -211,38 +211,9 @@ body {
   padding: 20px;
 }
 
-/* Groups */
-.device-group {
-  margin-bottom: 24px;
-}
-
-.group-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-  padding-left: 4px;
-}
-
-.group-name {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.group-count {
-  font-size: 11px;
-  color: var(--text-muted);
-  background: rgba(255,255,255,0.06);
-  padding: 2px 8px;
-  border-radius: 10px;
-}
-
 .device-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -255,6 +226,9 @@ body {
   border: 1px solid var(--border);
   position: relative;
   overflow: hidden;
+  flex: 1 1 280px;
+  max-width: 400px;
+  min-width: 260px;
 }
 .device-card:hover { background: var(--bg-card-hover); border-color: rgba(255,255,255,0.1); }
 
@@ -294,6 +268,43 @@ body {
   box-shadow: 0 0 6px rgba(52,211,153,0.4);
 }
 .online-dot.offline { background: var(--stop); box-shadow: none; }
+
+/* Groupe : compteur et sous-appareils */
+.device-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.08);
+  padding: 1px 7px;
+  border-radius: 8px;
+  margin-left: 2px;
+}
+
+.sub-devices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.sub-device {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: rgba(255,255,255,0.04);
+  padding: 3px 8px;
+  border-radius: 10px;
+}
+
+.online-dot-sm {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--success);
+  flex-shrink: 0;
+}
+.online-dot-sm.offline { background: var(--stop); }
 
 .device-mode-label {
   font-size: 12px;
@@ -416,7 +427,7 @@ body {
 
 /* ==================== MOBILE ==================== */
 @media (max-width: 600px) {
-  .device-grid { grid-template-columns: 1fr; }
+  .device-card { flex: 1 1 100%; max-width: none; min-width: 0; }
   .device-container { padding: 16px 12px; }
   .global-controls { padding: 12px; gap: 10px; }
   .control-divider { display: none; }
