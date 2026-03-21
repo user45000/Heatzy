@@ -19,8 +19,28 @@ async function checkAuth() {
   try { const { authenticated } = await api('GET','auth'); authenticated ? showDashboard() : showLogin(); }
   catch { showLogin(); }
 }
-function showLogin() { document.getElementById('login-screen').hidden=false; document.getElementById('dashboard-screen').hidden=true; }
-function showDashboard() { document.getElementById('login-screen').hidden=true; document.getElementById('dashboard-screen').hidden=false; loadDevices(); }
+const SIMPLE_MODE_KEY = 'heatzy_simple_mode';
+function isSimpleMode() { return localStorage.getItem(SIMPLE_MODE_KEY) !== 'advanced'; }
+function setSimpleMode(simple) { localStorage.setItem(SIMPLE_MODE_KEY, simple ? 'simple' : 'advanced'); }
+
+function hideAllScreens() {
+  document.getElementById('login-screen').hidden=true;
+  document.getElementById('dashboard-screen').hidden=true;
+  document.getElementById('simple-screen').hidden=true;
+}
+function showLogin() { hideAllScreens(); document.getElementById('login-screen').hidden=false; }
+function showDashboard() {
+  hideAllScreens();
+  if (isSimpleMode()) {
+    document.getElementById('simple-screen').hidden=false;
+    loadDevicesSimple();
+  } else {
+    document.getElementById('dashboard-screen').hidden=false;
+    loadDevices();
+  }
+}
+function switchToAdvanced() { setSimpleMode(false); showDashboard(); }
+function switchToSimple() { setSimpleMode(true); showDashboard(); }
 
 document.getElementById('login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -370,6 +390,52 @@ function updateLastRefreshDisplay() {
   document.getElementById('last-update').textContent = txt;
 }
 setInterval(updateLastRefreshDisplay, 10000);
+
+// --- Simple mode ---
+async function loadDevicesSimple() {
+  const statusEl = document.getElementById('simple-status');
+  statusEl.textContent = 'Chargement...';
+  try {
+    devices = await api('GET','devices');
+    const online = devices.filter(d=>d.is_online).length;
+    const offline = devices.filter(d=>!d.is_online).length;
+    let txt = `<span class="s-ok">${online} en ligne</span>`;
+    if (offline > 0) txt += ` · <span class="s-warn">${offline} hors ligne</span>`;
+    statusEl.innerHTML = txt;
+  } catch(e) { statusEl.textContent = ''; }
+}
+
+// Simple mode buttons
+document.getElementById('simple-leave').addEventListener('click', async()=>{
+  const btn = document.getElementById('simple-leave');
+  const statusEl = document.getElementById('simple-status');
+  btn.classList.add('is-busy');
+  statusEl.innerHTML = '⏳ Extinction en cours...';
+  try {
+    await api('POST','timer-all',{enabled:false});
+    await api('POST','mode-all',{mode:'stop',force:true});
+    statusEl.innerHTML = '<span class="s-ok">✅ Tout est eteint</span>';
+  } catch(e) {
+    statusEl.innerHTML = '<span class="s-warn">❌ Erreur: '+esc(e.message)+'</span>';
+  } finally { btn.classList.remove('is-busy'); }
+});
+
+document.getElementById('simple-home').addEventListener('click', async()=>{
+  const btn = document.getElementById('simple-home');
+  const statusEl = document.getElementById('simple-status');
+  btn.classList.add('is-busy');
+  statusEl.innerHTML = '⏳ Activation en cours...';
+  try {
+    await api('POST','timer-all',{enabled:true});
+    statusEl.innerHTML = '<span class="s-ok">✅ Programme active</span>';
+  } catch(e) {
+    statusEl.innerHTML = '<span class="s-warn">❌ Erreur: '+esc(e.message)+'</span>';
+  } finally { btn.classList.remove('is-busy'); }
+});
+
+// Toggle entre modes
+document.getElementById('simple-to-advanced').addEventListener('click', switchToAdvanced);
+document.getElementById('simple-mode-btn').addEventListener('click', switchToSimple);
 
 // SW cleanup
 if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(r=>r.forEach(r=>r.unregister()));if(window.caches)caches.keys().then(k=>k.forEach(k=>caches.delete(k)))}

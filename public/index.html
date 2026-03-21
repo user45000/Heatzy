@@ -31,12 +31,38 @@
     </div>
   </div>
 
-  <!-- Dashboard -->
+  <!-- Simple mode -->
+  <div id="simple-screen" class="screen" hidden>
+    <div class="simple-container">
+      <div class="simple-header">
+        <span class="simple-title">🔥 Heatzy</span>
+        <button class="simple-toggle-mode" id="simple-to-advanced">Mode avance</button>
+      </div>
+      <div class="simple-buttons">
+        <button class="simple-btn simple-leave" id="simple-leave">
+          <span class="simple-icon">🧳</span>
+          <span class="simple-label">Je pars</span>
+          <span class="simple-desc">Tout eteindre</span>
+        </button>
+        <button class="simple-btn simple-home" id="simple-home">
+          <span class="simple-icon">🏠</span>
+          <span class="simple-label">Je rentre</span>
+          <span class="simple-desc">Activer le programme</span>
+        </button>
+      </div>
+      <div id="simple-status" class="simple-status"></div>
+    </div>
+  </div>
+
+  <!-- Dashboard (advanced) -->
   <div id="dashboard-screen" class="screen" hidden>
     <header class="topbar">
       <span class="topbar-title">🔥 Heatzy</span>
       <div class="topbar-actions">
         <span id="last-update" class="last-update"></span>
+        <button class="icon-btn" id="simple-mode-btn" title="Mode simple">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        </button>
         <button class="icon-btn" id="refresh-btn" title="Actualiser">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
         </button>
