@@ -85,7 +85,13 @@ async function sendWithRetry(did, token, payload, expectedMode, maxRetries = 3) 
       try {
         const status = await gizwitsRequest('GET', `/devdata/${did}/latest`, token);
         const attrs = status.attr || status.attrs || {};
-        if (attrs.mode === expectedMode) {
+        // Normaliser le mode (V1 retourne un nombre)
+        let currentMode = attrs.mode;
+        if (typeof currentMode === 'number') {
+          const map = { 0: 'cft', 1: 'eco', 2: 'fro', 3: 'stop' };
+          currentMode = map[currentMode] || 'stop';
+        }
+        if (currentMode === expectedMode) {
           return { verified: true, attempt };
         }
         // Mode pas change, on retente
@@ -161,10 +167,27 @@ app.get(BASE_PATH + 'api/devices', requireAuth, async (req, res) => {
 app.get(BASE_PATH + 'api/devices/:did/status', requireAuth, async (req, res) => {
   try {
     const result = await gizwitsRequest('GET', `/devdata/${req.params.did}/latest`, req.session.token);
-    res.json(result.attr || result.attrs || {});
+    const attrs = result.attr || result.attrs || {};
+    // Normaliser le mode : V1 retourne parfois un nombre au lieu d'une string
+    if (typeof attrs.mode === 'number') {
+      const V1_MODE_MAP = { 0: 'cft', 1: 'eco', 2: 'fro', 3: 'stop' };
+      attrs.mode = V1_MODE_MAP[attrs.mode] || 'stop';
+    }
+    res.json(attrs);
   } catch (err) {
     if (err.status === 401) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
     res.status(500).json({ error: 'Erreur API' });
+  }
+});
+
+// Debug : retourne les donnees brutes de l'API pour un appareil
+app.get(BASE_PATH + 'api/devices/:did/raw', requireAuth, async (req, res) => {
+  try {
+    const result = await gizwitsRequest('GET', `/devdata/${req.params.did}/latest`, req.session.token);
+    res.json(result);
+  } catch (err) {
+    if (err.status === 401) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
+    res.status(500).json({ error: 'Erreur API', details: err });
   }
 });
 
