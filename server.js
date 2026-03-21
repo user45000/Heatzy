@@ -94,21 +94,14 @@ async function sendToAll(devices, token, payloadFn) {
   return { total: devices.length, succeeded, failed: devices.length - succeeded };
 }
 
-// Envoyer un mode a tous : desactiver programme d'abord, puis changer le mode
+// Envoyer un mode a tous : commande atomique mode + timer_switch en un seul appel
 async function sendModeToAll(devices, token, mode) {
-  // 1. Desactiver le programme sur tous (pour eviter qu'il ecrase le mode)
-  for (const d of devices) {
-    await sendCommand(d.did, token, { attrs: { timer_switch: 0 } });
-    await sleep(200);
-  }
-  await sleep(500);
-
-  // 2. Envoyer le mode
   let succeeded = 0;
   for (const d of devices) {
-    const ok = await sendCommand(d.did, token, { attrs: { mode } });
+    // Envoyer mode + desactiver programme en UNE seule commande (evite les race conditions)
+    const ok = await sendCommand(d.did, token, { attrs: { mode, timer_switch: 0 } });
     if (ok) succeeded++;
-    await sleep(300);
+    await sleep(400);
   }
 
   return { total: devices.length, succeeded, failed: devices.length - succeeded };
@@ -227,7 +220,8 @@ app.get(BASE_PATH + 'api/devices/:did/raw', requireAuth, async (req, res) => {
 app.post(BASE_PATH + 'api/devices/:did/mode', requireAuth, async (req, res) => {
   try {
     const { mode } = req.body;
-    const ok = await sendCommand(req.params.did, req.session.token, { attrs: { mode } });
+    // Commande atomique : mode + desactiver programme
+    const ok = await sendCommand(req.params.did, req.session.token, { attrs: { mode, timer_switch: 0 } });
     res.json({ success: ok });
   } catch (err) {
     if (err.status === 401) {
