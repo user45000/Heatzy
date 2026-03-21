@@ -1,4 +1,4 @@
-const CACHE_NAME = 'heatzy-v1';
+const CACHE_NAME = 'heatzy-v2';
 const STATIC_ASSETS = [
   './',
   './css/style.css',
@@ -28,25 +28,25 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch : network-first pour les API, cache-first pour les assets
+// Fetch : network-first, fallback cache (pour toujours avoir la derniere version)
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // API calls : toujours réseau
+  // API calls : toujours reseau, pas de cache
   if (url.pathname.includes('/api/')) {
     return event.respondWith(fetch(event.request));
   }
 
-  // Assets statiques : cache-first, fallback réseau
+  // Tout le reste : network-first, fallback cache (offline)
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      return cached || fetch(event.request).then(response => {
-        if (response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-        }
-        return response;
-      });
+    fetch(event.request).then(response => {
+      if (response.ok) {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+      }
+      return response;
+    }).catch(() => {
+      return caches.match(event.request);
     })
   );
 });
