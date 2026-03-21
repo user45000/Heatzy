@@ -66,7 +66,8 @@ function singleCard(d) {
   const timerOn=s.timer_switch===1, lockOn=s.lock_switch===1;
   const mc=on?`m-${mode}`:'m-stop', bc=on?`badge-${mode}`:'badge-offline';
   const label=on?`${MODE_EMOJI[mode]||''} ${MODE_LABELS[mode]||mode}`:'Hors ligne';
-  const derog = s.derog_mode===2 ? `<div class="derog">⚡ Boost ${s.derog_time}min</div>` : '';
+  const boosting = s.derog_mode===2;
+  const derog = boosting ? `<div class="derog">⚡ Boost ${s.derog_time>=60?Math.round(s.derog_time/60)+'h':s.derog_time+'min'}</div>` : '';
   const enc=b64({dids:[d.did]});
   return `<div class="card ${mc}" data-dids="${d.did}">
     <div class="card-head">
@@ -75,7 +76,7 @@ function singleCard(d) {
     </div>
     ${modeButtons(enc,mode,on)}
     ${derog}
-    ${extras(enc,timerOn,lockOn,on)}
+    ${extras(enc,timerOn,lockOn,on,boosting)}
   </div>`;
 }
 
@@ -92,6 +93,7 @@ function groupCard(card) {
   else { bc=`badge-${dom}`; label=`${MODE_EMOJI[dom]||''} ${MODE_LABELS[dom]||dom}`; }
   const timerOn=sts.filter(s=>s.timer_switch===1).length>sts.length/2;
   const lockOn=sts.filter(s=>s.lock_switch===1).length>sts.length/2;
+  const boosting=sts.some(s=>s.derog_mode===2);
   const enc=b64({dids:devs.map(d=>d.did)});
   const subs=devs.map(d=>{
     const nm=d.name||'',m2=nm.match(/^.+?\s*[-–]\s*(.+)$/),sub=m2?m2[1].trim():nm;
@@ -104,7 +106,7 @@ function groupCard(card) {
     </div>
     <div class="sub-list">${subs}</div>
     ${modeButtons(enc,same?dom:null,anyOn)}
-    ${extras(enc,timerOn,lockOn,anyOn)}
+    ${extras(enc,timerOn,lockOn,anyOn,boosting)}
   </div>`;
 }
 
@@ -117,11 +119,14 @@ function modeButtons(enc, active, on) {
   ).join('')}</div>`;
 }
 
-function extras(enc, timerOn, lockOn, on) {
+function extras(enc, timerOn, lockOn, on, boosting) {
+  const boostBtn = boosting
+    ? `<button class="x-btn on" data-action="boost-cancel" data-targets="${enc}" ${!on?'disabled':''}>⚡ Annuler</button>`
+    : `<button class="x-btn" data-action="boost-pick" data-targets="${enc}" ${!on?'disabled':''}>⚡ Boost</button>`;
   return `<div class="extras">
     <button class="x-btn ${timerOn?'on':''}" data-action="timer" data-targets="${enc}" data-enabled="${!timerOn}" ${!on?'disabled':''}>📅 ${timerOn?'ON':'OFF'}</button>
     <button class="x-btn ${lockOn?'on':''}" data-action="lock" data-targets="${enc}" data-enabled="${!lockOn}" ${!on?'disabled':''}>🔒 ${lockOn?'ON':'OFF'}</button>
-    <button class="x-btn" data-action="boost-pick" data-targets="${enc}" ${!on?'disabled':''}>⚡ Boost</button>
+    ${boostBtn}
   </div>`;
 }
 
@@ -167,6 +172,10 @@ document.getElementById('devices').addEventListener('click', async(e)=>{
       for(const did of dids) await api('POST',`devices/${did}/lock`,{enabled:en});
       dids.forEach(d=>{if(deviceStatuses[d])deviceStatuses[d].lock_switch=en?1:0});
       render();toast(`🔒 ${label} — Verrou ${en?'ON':'OFF'}`,'success');
+    }else if(action==='boost-cancel'){
+      for(const did of dids) await api('POST',`devices/${did}/boost`,{minutes:0});
+      dids.forEach(d=>{if(deviceStatuses[d]){deviceStatuses[d].derog_mode=0;deviceStatuses[d].derog_time=0}});
+      render();toast(`⚡ ${label} — Boost annule`,'success');
     }else if(action==='boost-pick'){
       hideProgress();setCardBusy(dids,false);openBoost(dids);return;
     }
