@@ -41,6 +41,8 @@ async function loadDevices() {
     deviceStatuses = {};
     devices.forEach((d,i) => { deviceStatuses[d.did] = st[i].status==='fulfilled' ? st[i].value : {}; });
     render();
+    updateOfflineAlert();
+    updateLastRefresh();
   } catch(e) { toast('Erreur: '+e.message,'error'); }
   finally { document.getElementById('loading').hidden=true; }
 }
@@ -239,6 +241,54 @@ function toast(msg,type=''){
   const el=document.getElementById('toast');el.textContent=msg;el.className='toast show'+(type?' '+type:'');el.hidden=false;
   clearTimeout(toastTimer);toastTimer=setTimeout(()=>{el.classList.remove('show');setTimeout(()=>el.hidden=true,300)},type==='error'?5000:3000);
 }
+
+// --- Scenarios ---
+async function runScenario(name, mode) {
+  const btn = document.getElementById('scene-'+name);
+  btn.classList.add('is-busy'); showProgress();
+  try {
+    const r = await api('POST','mode-all',{mode});
+    devices.forEach(d=>{if(deviceStatuses[d.did])deviceStatuses[d.did].mode=mode});
+    render(); flashCards(devices.map(d=>d.did),mode);
+    const labels = {leave:'🧳 Depart',home:'🏠 Retour',night:'🌙 Bonne nuit'};
+    r.failed>0 ? toast(`${labels[name]} — ${r.failed} echec(s)`,'error') : toast(`${labels[name]} active`,'success');
+    delayedRefresh(8000);
+  } catch(e) { toast('❌ '+e.message,'error'); }
+  finally { btn.classList.remove('is-busy'); hideProgress(); }
+}
+
+document.getElementById('scene-leave').addEventListener('click',()=>runScenario('leave','fro'));
+document.getElementById('scene-home').addEventListener('click',()=>runScenario('home','cft'));
+document.getElementById('scene-night').addEventListener('click',()=>runScenario('night','eco'));
+
+// --- Offline alert ---
+function updateOfflineAlert() {
+  const offline = devices.filter(d=>!d.is_online);
+  const el = document.getElementById('offline-alert');
+  if (offline.length === 0) {
+    el.hidden = true;
+  } else {
+    el.hidden = false;
+    el.innerHTML = `⚠️ ${offline.length} appareil(s) hors ligne : ${offline.map(d=>'<strong>'+esc(d.name)+'</strong>').join(', ')}`;
+  }
+}
+
+// --- Last update timestamp ---
+let lastRefreshTime = null;
+function updateLastRefresh() {
+  lastRefreshTime = Date.now();
+  updateLastRefreshDisplay();
+}
+function updateLastRefreshDisplay() {
+  if (!lastRefreshTime) return;
+  const sec = Math.round((Date.now()-lastRefreshTime)/1000);
+  let txt;
+  if (sec < 5) txt = 'a l\'instant';
+  else if (sec < 60) txt = `${sec}s`;
+  else txt = `${Math.round(sec/60)}min`;
+  document.getElementById('last-update').textContent = txt;
+}
+setInterval(updateLastRefreshDisplay, 10000);
 
 // SW cleanup
 if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(r=>r.forEach(r=>r.unregister()));if(window.caches)caches.keys().then(k=>k.forEach(k=>caches.delete(k)))}

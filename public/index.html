@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="css/style.css?v=6">
+  <link rel="stylesheet" href="css/style.css?v=7">
 </head>
 <body>
   <div id="progress-bar" class="progress-bar" hidden><div class="progress-fill"></div></div>
@@ -36,6 +36,7 @@
     <header class="topbar">
       <span class="topbar-title">🔥 Heatzy</span>
       <div class="topbar-actions">
+        <span id="last-update" class="last-update"></span>
         <button class="icon-btn" id="refresh-btn" title="Actualiser">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
         </button>
@@ -44,6 +45,16 @@
         </button>
       </div>
     </header>
+
+    <!-- Scenarios -->
+    <div class="scenarios">
+      <button class="scene-btn scene-leave" id="scene-leave">🧳 Je pars</button>
+      <button class="scene-btn scene-home" id="scene-home">🏠 Je rentre</button>
+      <button class="scene-btn scene-night" id="scene-night">🌙 Bonne nuit</button>
+    </div>
+
+    <!-- Offline alert -->
+    <div id="offline-alert" class="offline-alert" hidden></div>
 
     <!-- Quick actions -->
     <div class="quick-actions">
@@ -89,6 +100,6 @@
 
   <div id="toast" class="toast" hidden></div>
 
-  <script src="js/app.js?v=6"></script>
+  <script src="js/app.js?v=7"></script>
 </body>
 </html>

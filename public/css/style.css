@@ -40,10 +40,26 @@ body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var
 /* Topbar */
 .topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
 .topbar-title{font-size:16px;font-weight:700}
-.topbar-actions{display:flex;gap:4px}
+.topbar-actions{display:flex;gap:4px;align-items:center}
+.last-update{font-size:10px;color:var(--t3);margin-right:4px}
 .icon-btn{background:none;border:none;color:var(--t2);cursor:pointer;padding:6px;border-radius:var(--r2);transition:all .15s;display:flex;align-items:center;line-height:1}
 .icon-btn:hover{color:var(--text);background:rgba(255,255,255,0.08)}
 .icon-btn.spinning svg{animation:spin .6s linear infinite}
+
+/* Scenarios */
+.scenarios{display:flex;gap:6px;padding:10px 14px;background:var(--bg2);border-bottom:1px solid var(--border);overflow:hidden}
+.scene-btn{flex:1;padding:10px 4px;border:none;border-radius:var(--r);font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;transition:all .15s;text-align:center;min-width:0;white-space:nowrap}
+.scene-btn:active{transform:scale(.95)}
+.scene-btn.is-busy{opacity:.5;pointer-events:none}
+.scene-leave{background:linear-gradient(135deg,rgba(180,154,255,.2),rgba(180,154,255,.08));color:var(--fro);border:1px solid rgba(180,154,255,.25)}
+.scene-leave:hover{background:rgba(180,154,255,.25)}
+.scene-home{background:linear-gradient(135deg,rgba(255,107,138,.2),rgba(255,107,138,.08));color:var(--cft);border:1px solid rgba(255,107,138,.25)}
+.scene-home:hover{background:rgba(255,107,138,.25)}
+.scene-night{background:linear-gradient(135deg,rgba(77,216,240,.2),rgba(77,216,240,.08));color:var(--eco);border:1px solid rgba(77,216,240,.25)}
+.scene-night:hover{background:rgba(77,216,240,.25)}
+
+/* Offline alert */
+.offline-alert{margin:8px 14px;padding:8px 12px;background:rgba(240,101,128,.1);border:1px solid rgba(240,101,128,.25);border-radius:var(--r2);color:var(--err);font-size:11px;font-weight:500;display:flex;align-items:center;gap:6px}
 
 /* Quick actions */
 .quick-actions{display:flex;flex-direction:column;gap:6px;padding:10px 14px;background:var(--bg2);border-bottom:1px solid var(--border);overflow:hidden}
