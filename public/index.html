@@ -88,6 +88,30 @@
     </div>
   </div>
 
+  <!-- Boost modal -->
+  <div id="boost-modal" class="modal-overlay" hidden>
+    <div class="modal">
+      <h2>Boost</h2>
+      <p>Duree du boost en heures :</p>
+      <div class="boost-presets">
+        <button class="btn btn-mode btn-cft boost-preset" data-hours="1">1h</button>
+        <button class="btn btn-mode btn-cft boost-preset" data-hours="2">2h</button>
+        <button class="btn btn-mode btn-cft boost-preset" data-hours="4">4h</button>
+        <button class="btn btn-mode btn-cft boost-preset" data-hours="8">8h</button>
+        <button class="btn btn-mode btn-cft boost-preset" data-hours="12">12h</button>
+        <button class="btn btn-mode btn-cft boost-preset" data-hours="24">24h</button>
+      </div>
+      <div class="field" style="margin-top:16px">
+        <label for="boost-hours">Ou saisir une duree (heures)</label>
+        <input type="number" id="boost-hours" value="2" min="1" max="72" step="1">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="boost-cancel">Annuler</button>
+        <button class="btn btn-primary" id="boost-confirm">Activer</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast -->
   <div id="toast" class="toast" hidden></div>
 

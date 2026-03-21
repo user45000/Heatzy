@@ -284,19 +284,9 @@ function renderExtras(dids, timerOn, lockOn, online) {
         Verrou ${lockOn ? 'ON' : 'OFF'}
       </button>
       <button class="extra-btn"
-              data-action="boost" data-targets="${encoded}" data-minutes="60"
+              data-action="boost-pick" data-targets="${encoded}"
               ${!online ? 'disabled' : ''}>
-        Boost 1h
-      </button>
-      <button class="extra-btn"
-              data-action="boost" data-targets="${encoded}" data-minutes="240"
-              ${!online ? 'disabled' : ''}>
-        Boost 4h
-      </button>
-      <button class="extra-btn"
-              data-action="boost" data-targets="${encoded}" data-minutes="480"
-              ${!online ? 'disabled' : ''}>
-        Boost 8h
+        Boost...
       </button>
     </div>
   `;
@@ -401,19 +391,63 @@ document.getElementById('devices').addEventListener('click', async (e) => {
       renderDevices();
       toast(`${label} — Verrou ${enabled ? 'active' : 'desactive'}`, 'success');
 
-    } else if (action === 'boost') {
-      const minutes = parseInt(btn.dataset.minutes);
-      for (const did of dids) {
-        await api('POST', `devices/${did}/boost`, { minutes });
-      }
-      const dur = minutes >= 60 ? `${minutes / 60}h` : `${minutes}min`;
-      dids.forEach(did => {
-        if (deviceStatuses[did]) { deviceStatuses[did].derog_mode = 2; deviceStatuses[did].derog_time = minutes; }
-      });
-      renderDevices();
-      toast(`${label} — Boost ${dur} active`, 'success');
+    } else if (action === 'boost-pick') {
+      // Ouvrir la modale boost
+      hideProgress();
+      setCardBusy(dids, false);
+      openBoostModal(dids);
+      return;
     }
 
+    delayedRefresh(8000);
+  } catch (err) {
+    toast('Erreur: ' + err.message, 'error');
+  } finally {
+    hideProgress();
+    setCardBusy(dids, false);
+  }
+});
+
+// --- Boost modal ---
+let boostTargetDids = [];
+
+function openBoostModal(dids) {
+  boostTargetDids = dids;
+  document.getElementById('boost-hours').value = 2;
+  document.getElementById('boost-modal').hidden = false;
+}
+
+document.getElementById('boost-cancel').addEventListener('click', () => {
+  document.getElementById('boost-modal').hidden = true;
+});
+
+// Presets
+document.querySelectorAll('.boost-preset').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.getElementById('boost-hours').value = btn.dataset.hours;
+  });
+});
+
+document.getElementById('boost-confirm').addEventListener('click', async () => {
+  const hours = parseFloat(document.getElementById('boost-hours').value) || 2;
+  const minutes = Math.round(hours * 60);
+  document.getElementById('boost-modal').hidden = true;
+
+  const dids = boostTargetDids;
+  const label = dids.length === 1 ? getDeviceName(dids[0]) : `${dids.length} appareils`;
+
+  showProgress();
+  setCardBusy(dids, true);
+  try {
+    for (const did of dids) {
+      await api('POST', `devices/${did}/boost`, { minutes });
+    }
+    dids.forEach(did => {
+      if (deviceStatuses[did]) { deviceStatuses[did].derog_mode = 2; deviceStatuses[did].derog_time = minutes; }
+    });
+    renderDevices();
+    toast(`${label} — Boost ${hours}h active`, 'success');
+    delayedRefresh(8000);
   } catch (err) {
     toast('Erreur: ' + err.message, 'error');
   } finally {
@@ -435,6 +469,7 @@ document.getElementById('programme-on-btn').addEventListener('click', async () =
     });
     renderDevices();
     toast(`Programme active — ${result.succeeded}/${result.total} appareils`, 'success');
+    delayedRefresh(8000);
   } catch (err) {
     toast('Erreur: ' + err.message, 'error');
   } finally {
@@ -451,10 +486,10 @@ document.getElementById('programme-off-btn').addEventListener('click', async () 
     const result = await api('POST', 'timer-all', { enabled: false });
     devices.forEach(d => {
       if (deviceStatuses[d.did]) deviceStatuses[d.did].timer_switch = 0;
-
     });
     renderDevices();
     toast(`Programme desactive — ${result.succeeded}/${result.total} appareils`, 'success');
+    delayedRefresh(8000);
   } catch (err) {
     toast('Erreur: ' + err.message, 'error');
   } finally {
@@ -483,6 +518,7 @@ document.querySelectorAll('.control-buttons .btn-mode').forEach(btn => {
       } else {
         toast(`Tous en ${MODE_LABELS[mode]}`, 'success');
       }
+      delayedRefresh(8000);
     } catch (err) {
       toast('Erreur: ' + err.message, 'error');
     } finally {
