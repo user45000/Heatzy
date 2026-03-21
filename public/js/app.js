@@ -1,6 +1,6 @@
 const BASE = document.querySelector('link[rel="manifest"]').href.replace('manifest.json', '');
-const MODE_LABELS = { cft:'Confort', eco:'Eco', fro:'Hors-gel', stop:'Off' };
-const MODE_EMOJI = { cft:'🔥', eco:'🌿', fro:'❄️', stop:'⭕' };
+const MODE_LABELS = { cft:'Confort', eco:'Nuit', fro:'Hors-gel', stop:'Off' };
+const MODE_EMOJI = { cft:'🔥', eco:'🌙', fro:'❄️', stop:'⭕' };
 
 let devices = [], deviceStatuses = {};
 

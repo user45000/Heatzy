@@ -14,8 +14,8 @@
   --safe-t:env(safe-area-inset-top,0px);--safe-b:env(safe-area-inset-bottom,0px);
 }
 
-html{height:100%}
-body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100%;-webkit-font-smoothing:antialiased;padding-top:var(--safe-t);padding-bottom:var(--safe-b);font-size:13px;line-height:1.4}
+html{height:100%;overflow-x:hidden}
+body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100%;-webkit-font-smoothing:antialiased;padding-top:var(--safe-t);padding-bottom:var(--safe-b);font-size:13px;line-height:1.4;overflow-x:hidden}
 .screen{min-height:100svh}
 
 /* Progress */
@@ -46,8 +46,9 @@ body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var
 .icon-btn:hover{background:rgba(255,255,255,0.08)}
 
 /* Quick actions */
-.quick-actions{display:flex;gap:6px;padding:10px 14px;background:var(--bg2);border-bottom:1px solid var(--border);flex-wrap:wrap}
-.qa-btn{padding:6px 12px;border:none;border-radius:20px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .15s;white-space:nowrap}
+.quick-actions{display:flex;flex-direction:column;gap:6px;padding:10px 14px;background:var(--bg2);border-bottom:1px solid var(--border);overflow:hidden}
+.qa-row{display:flex;gap:6px}
+.qa-btn{flex:1;padding:6px 4px;border:none;border-radius:20px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .15s;white-space:nowrap;text-align:center;min-width:0}
 .qa-btn:active{transform:scale(.95)}
 .qa-cft{background:rgba(255,107,138,0.15);color:var(--cft)}
 .qa-cft:hover{background:rgba(255,107,138,0.25)}
