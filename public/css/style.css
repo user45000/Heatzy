@@ -59,10 +59,12 @@ body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var
 .simple-icon{font-size:56px;line-height:1;filter:drop-shadow(0 4px 12px rgba(0,0,0,.3))}
 .simple-label{font-size:20px;font-weight:700;letter-spacing:-.3px}
 .simple-desc{font-size:11px;color:var(--t3);text-align:center}
-.simple-leave{border-color:rgba(110,110,130,.35);background:linear-gradient(180deg,var(--bg2),rgba(110,110,130,.06))}
-.simple-leave:hover{background:linear-gradient(180deg,var(--bg2),rgba(110,110,130,.15));border-color:rgba(110,110,130,.6);box-shadow:0 0 20px rgba(110,110,130,.12)}
+.simple-leave{border-color:rgba(240,101,128,.2);background:linear-gradient(180deg,var(--bg2),rgba(240,101,128,.04))}
+.simple-leave:hover{background:linear-gradient(180deg,var(--bg2),rgba(240,101,128,.1));border-color:rgba(240,101,128,.35);box-shadow:0 0 16px rgba(240,101,128,.08)}
+.simple-leave:active{border-color:rgba(240,101,128,.6);box-shadow:0 0 24px rgba(240,101,128,.2)}
 .simple-home{border-color:rgba(74,222,128,.35);background:linear-gradient(180deg,var(--bg2),rgba(74,222,128,.06))}
-.simple-home:hover{background:linear-gradient(180deg,var(--bg2),rgba(74,222,128,.15));border-color:rgba(74,222,128,.5);box-shadow:0 0 20px rgba(74,222,128,.12)}
+.simple-home:hover{background:linear-gradient(180deg,var(--bg2),rgba(74,222,128,.15));border-color:rgba(74,222,128,.5);box-shadow:0 0 16px rgba(74,222,128,.1)}
+.simple-home:active{border-color:rgba(74,222,128,.7);box-shadow:0 0 24px rgba(74,222,128,.2)}
 .simple-status{width:100%;max-width:400px;text-align:center;font-size:12px;color:var(--t3);min-height:20px}
 .simple-status .s-ok{color:var(--ok)}
 .simple-status .s-warn{color:var(--warn)}
