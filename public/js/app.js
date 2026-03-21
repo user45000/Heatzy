@@ -411,10 +411,8 @@ document.getElementById('devices').addEventListener('click', async (e) => {
       toast(`${label} — Boost ${dur} active`, 'success');
     }
 
-    delayedRefresh(5000);
   } catch (err) {
     toast('Erreur: ' + err.message, 'error');
-    delayedRefresh(2000);
   } finally {
     hideProgress();
     setCardBusy(dids, false);
@@ -431,7 +429,6 @@ document.getElementById('programme-on-btn').addEventListener('click', async () =
     devices.forEach(d => { if (deviceStatuses[d.did]) deviceStatuses[d.did].timer_switch = 1; });
     renderDevices();
     toast(`Programme active — ${result.succeeded}/${result.total} appareils`, 'success');
-    delayedRefresh(5000);
   } catch (err) {
     toast('Erreur: ' + err.message, 'error');
   } finally {
@@ -449,7 +446,6 @@ document.getElementById('programme-off-btn').addEventListener('click', async () 
     devices.forEach(d => { if (deviceStatuses[d.did]) deviceStatuses[d.did].timer_switch = 0; });
     renderDevices();
     toast(`Programme desactive — ${result.succeeded}/${result.total} appareils`, 'success');
-    delayedRefresh(5000);
   } catch (err) {
     toast('Erreur: ' + err.message, 'error');
   } finally {
@@ -475,8 +471,6 @@ document.querySelectorAll('.control-buttons .btn-mode').forEach(btn => {
       } else {
         toast(`Tous en ${MODE_LABELS[mode]}`, 'success');
       }
-      // Laisser l'API Gizwits se mettre a jour avant de relire
-      delayedRefresh(6000);
     } catch (err) {
       toast('Erreur: ' + err.message, 'error');
     } finally {
