@@ -87,64 +87,24 @@ async function sendToAll(devices, token, payloadFn) {
   return { total: devices.length, succeeded, failed: devices.length - succeeded };
 }
 
-// Lire le mode actuel d'un appareil
-async function readMode(did, token) {
-  try {
-    const result = await gizwitsRequest('GET', `/devdata/${did}/latest`, token);
-    const attrs = result.attr || result.attrs || {};
-    return attrs.mode || null;
-  } catch (e) {
-    return null;
-  }
-}
-
-// Envoyer un mode a tous avec verification + re-essai des echecs
-async function sendModeToAllWithVerify(devices, token, mode) {
-  // 1er envoi
+// Envoyer un mode a tous : desactiver programme d'abord, puis changer le mode
+async function sendModeToAll(devices, token, mode) {
+  // 1. Desactiver le programme sur tous (pour eviter qu'il ecrase le mode)
   for (const d of devices) {
-    await sendCommand(d.did, token, { attrs: { mode } });
+    await sendCommand(d.did, token, { attrs: { timer_switch: 0 } });
+    await sleep(200);
+  }
+  await sleep(500);
+
+  // 2. Envoyer le mode
+  let succeeded = 0;
+  for (const d of devices) {
+    const ok = await sendCommand(d.did, token, { attrs: { mode } });
+    if (ok) succeeded++;
     await sleep(300);
   }
 
-  // Attendre que l'API propage
-  await sleep(2000);
-
-  // Verifier et re-essayer ceux qui n'ont pas change
-  const failed = [];
-  for (const d of devices) {
-    const current = await readMode(d.did, token);
-    if (current !== mode) {
-      failed.push(d);
-    }
-    await sleep(200);
-  }
-
-  if (failed.length > 0) {
-    // 2e tentative sur les echecs
-    await sleep(500);
-    for (const d of failed) {
-      await sendCommand(d.did, token, { attrs: { mode } });
-      await sleep(500);
-    }
-
-    // 3e verification apres 2s
-    await sleep(2000);
-    let stillFailed = 0;
-    for (const d of failed) {
-      const current = await readMode(d.did, token);
-      if (current !== mode) stillFailed++;
-      await sleep(200);
-    }
-
-    return {
-      total: devices.length,
-      succeeded: devices.length - stillFailed,
-      failed: stillFailed,
-      retried: failed.length
-    };
-  }
-
-  return { total: devices.length, succeeded: devices.length, failed: 0, retried: 0 };
+  return { total: devices.length, succeeded, failed: devices.length - succeeded };
 }
 
 function requireAuth(req, res, next) {
@@ -234,7 +194,7 @@ app.post(BASE_PATH + 'api/mode-all', requireAuth, async (req, res) => {
     const { mode } = req.body;
     const bindings = await gizwitsRequest('GET', '/bindings?limit=50&skip=0', req.session.token);
     const devices = (bindings.devices || []).filter(d => d.is_online);
-    const result = await sendModeToAllWithVerify(devices, req.session.token, mode);
+    const result = await sendModeToAll(devices, req.session.token, mode);
     res.json({ success: true, ...result });
   } catch (err) {
     if (err.status === 401) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }

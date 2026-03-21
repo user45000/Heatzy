@@ -470,15 +470,13 @@ document.querySelectorAll('.control-buttons .btn-mode').forEach(btn => {
       renderDevices();
       const allDids = devices.map(d => d.did);
       flashCards(allDids, mode);
-      let msg = `Tous en ${MODE_LABELS[mode]} — ${result.succeeded}/${result.total}`;
-      if (result.retried > 0) msg += ` (${result.retried} renvoyes)`;
       if (result.failed > 0) {
-        toast(msg + ` — ${result.failed} en echec`, 'error');
+        toast(`Tous en ${MODE_LABELS[mode]} — ${result.failed} echec(s)`, 'error');
       } else {
-        toast(msg, 'success');
+        toast(`Tous en ${MODE_LABELS[mode]}`, 'success');
       }
-      // Refresh rapide pour montrer le vrai etat
-      delayedRefresh(2000);
+      // Laisser l'API Gizwits se mettre a jour avant de relire
+      delayedRefresh(6000);
     } catch (err) {
       toast('Erreur: ' + err.message, 'error');
     } finally {
