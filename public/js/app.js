@@ -32,14 +32,21 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
 });
 document.getElementById('logout-btn').addEventListener('click', async()=>{ await api('POST','logout'); showLogin(); });
 
-// Devices
+// Devices — lecture sequentielle pour eviter les reponses obsoletes de l'API
 async function loadDevices() {
   document.getElementById('loading').hidden=false;
   try {
     devices = await api('GET','devices');
-    const st = await Promise.allSettled(devices.map(d=>api('GET',`devices/${d.did}/status`)));
     deviceStatuses = {};
-    devices.forEach((d,i) => { deviceStatuses[d.did] = st[i].status==='fulfilled' ? st[i].value : {}; });
+    // Lecture sequentielle avec 200ms entre chaque (l'API retourne des donnees obsoletes en parallele)
+    for (const d of devices) {
+      try {
+        deviceStatuses[d.did] = await api('GET',`devices/${d.did}/status`);
+      } catch(e) {
+        deviceStatuses[d.did] = {};
+      }
+      await new Promise(r=>setTimeout(r,200));
+    }
     render();
     updateOfflineAlert();
     updateLastRefresh();

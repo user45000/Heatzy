@@ -194,7 +194,10 @@ app.get(BASE_PATH + 'api/devices', requireAuth, async (req, res) => {
 app.get(BASE_PATH + 'api/devices/:did/status', requireAuth, async (req, res) => {
   try {
     const result = await gizwitsRequest('GET', `/devdata/${req.params.did}/latest`, req.session.token);
-    res.json(result.attr || result.attrs || {});
+    const attrs = result.attr || result.attrs || {};
+    // Inclure le timestamp de mise a jour pour detecter les donnees obsoletes
+    if (result.updated_at) attrs._updated_at = result.updated_at;
+    res.json(attrs);
   } catch (err) {
     if (err.status === 401) {
       const ok = await refreshTokenIfNeeded(req);
