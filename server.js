@@ -1,5 +1,6 @@
 const express = require('express');
 const session = require('express-session');
+const FileStore = require('session-file-store')(session);
 const path = require('path');
 const https = require('https');
 
@@ -12,6 +13,12 @@ const APP_ID = 'c70a66ff039d41b4a220e198b0fcc8b3';
 
 app.use(express.json());
 app.use(session({
+  store: new FileStore({
+    path: path.join(__dirname, 'sessions'),
+    ttl: 365 * 24 * 60 * 60, // 1 an en secondes
+    retries: 0,
+    logFn: () => {}
+  }),
   secret: process.env.SESSION_SECRET || 'heatzy-web-secret-key-change-in-prod',
   resave: false,
   saveUninitialized: false,
