@@ -168,7 +168,7 @@ function renderSingleCard(d) {
   const isV1s = [d.is_v1];
 
   return `
-    <div class="device-card ${modeClass}">
+    <div class="device-card ${modeClass}" data-dids="${d.did}">
       <div class="device-header">
         <div class="device-name">
           <span class="online-dot ${online ? '' : 'offline'}"></span>
@@ -228,7 +228,7 @@ function renderGroupCard(card) {
   }).join('');
 
   return `
-    <div class="device-card ${modeClass}">
+    <div class="device-card ${modeClass}" data-dids="${devs.map(d => d.did).join(',')}">
       <div class="device-header">
         <div class="device-name">
           ${escapeHtml(card.name)}
@@ -302,16 +302,66 @@ function renderExtras(dids, timerOn, lockOn, online) {
   `;
 }
 
+// --- Progress bar ---
+function showProgress() {
+  const bar = document.getElementById('progress-bar');
+  bar.hidden = false;
+  bar.classList.add('active');
+}
+function hideProgress() {
+  const bar = document.getElementById('progress-bar');
+  bar.classList.remove('active');
+  // Flash to 100% then hide
+  bar.querySelector('.progress-fill').style.width = '100%';
+  setTimeout(() => {
+    bar.hidden = true;
+    bar.querySelector('.progress-fill').style.width = '0%';
+  }, 300);
+}
+
+// --- Card busy state ---
+function setCardBusy(dids, busy) {
+  dids.forEach(did => {
+    const card = document.querySelector(`.device-card[data-dids*="${did}"]`);
+    if (!card) return;
+    if (busy) {
+      card.classList.add('is-busy');
+      if (!card.querySelector('.busy-spinner')) {
+        const sp = document.createElement('div');
+        sp.className = 'busy-spinner';
+        card.appendChild(sp);
+      }
+    } else {
+      card.classList.remove('is-busy');
+      const sp = card.querySelector('.busy-spinner');
+      if (sp) sp.remove();
+    }
+  });
+}
+
+// Flash card on mode change
+function flashCards(dids, mode) {
+  dids.forEach(did => {
+    const card = document.querySelector(`.device-card[data-dids*="${did}"]`);
+    if (!card) return;
+    card.classList.remove('flash-cft', 'flash-eco', 'flash-fro', 'flash-stop');
+    void card.offsetWidth; // force reflow
+    card.classList.add('flash-' + mode);
+    setTimeout(() => card.classList.remove('flash-' + mode), 700);
+  });
+}
+
 // --- Event delegation pour toutes les actions sur les cartes ---
 document.getElementById('devices').addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-action]');
   if (!btn || btn.disabled) return;
 
-  // Feedback visuel immediat
-  btn.classList.add('loading-btn');
   const action = btn.dataset.action;
-  const { dids, isV1s } = unb64(btn.dataset.targets);
+  const { dids } = unb64(btn.dataset.targets);
   const label = dids.length === 1 ? getDeviceName(dids[0]) : `${dids.length} appareils`;
+
+  showProgress();
+  setCardBusy(dids, true);
 
   try {
     if (action === 'mode') {
@@ -319,30 +369,34 @@ document.getElementById('devices').addEventListener('click', async (e) => {
       for (const did of dids) {
         await api('POST', `devices/${did}/mode`, { mode });
       }
-      toast(`${label} → ${MODE_LABELS[mode]}`, 'success');
       dids.forEach(did => {
         if (deviceStatuses[did]) deviceStatuses[did].mode = mode;
       });
+      renderDevices();
+      flashCards(dids, mode);
+      toast(`${label} → ${MODE_LABELS[mode]}`, 'success');
 
     } else if (action === 'timer') {
       const enabled = btn.dataset.enabled === 'true';
       for (const did of dids) {
         await api('POST', `devices/${did}/timer`, { enabled });
       }
-      toast(`${label} — Programme ${enabled ? 'active' : 'desactive'}`, 'success');
       dids.forEach(did => {
         if (deviceStatuses[did]) deviceStatuses[did].timer_switch = enabled ? 1 : 0;
       });
+      renderDevices();
+      toast(`${label} — Programme ${enabled ? 'active' : 'desactive'}`, 'success');
 
     } else if (action === 'lock') {
       const enabled = btn.dataset.enabled === 'true';
       for (const did of dids) {
         await api('POST', `devices/${did}/lock`, { enabled });
       }
-      toast(`${label} — Verrou ${enabled ? 'active' : 'desactive'}`, 'success');
       dids.forEach(did => {
         if (deviceStatuses[did]) deviceStatuses[did].lock_switch = enabled ? 1 : 0;
       });
+      renderDevices();
+      toast(`${label} — Verrou ${enabled ? 'active' : 'desactive'}`, 'success');
 
     } else if (action === 'boost') {
       const minutes = parseInt(btn.dataset.minutes);
@@ -350,49 +404,57 @@ document.getElementById('devices').addEventListener('click', async (e) => {
         await api('POST', `devices/${did}/boost`, { minutes });
       }
       const dur = minutes >= 60 ? `${minutes / 60}h` : `${minutes}min`;
-      toast(`${label} — Boost ${dur} active`, 'success');
       dids.forEach(did => {
         if (deviceStatuses[did]) { deviceStatuses[did].derog_mode = 2; deviceStatuses[did].derog_time = minutes; }
       });
+      renderDevices();
+      toast(`${label} — Boost ${dur} active`, 'success');
     }
 
-    renderDevices();
     delayedRefresh(5000);
   } catch (err) {
     toast('Erreur: ' + err.message, 'error');
     delayedRefresh(2000);
   } finally {
-    btn.classList.remove('loading-btn');
+    hideProgress();
+    setCardBusy(dids, false);
   }
 });
 
 // --- Programme global ON/OFF ---
 document.getElementById('programme-on-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('programme-on-btn');
+  btn.classList.add('is-busy');
+  showProgress();
   try {
     const result = await api('POST', 'timer-all', { enabled: true });
-    toast(`Programme active — ${result.succeeded}/${result.total} appareils`, 'success');
-    // Mise a jour optimiste
-    devices.forEach(d => {
-      if (deviceStatuses[d.did]) deviceStatuses[d.did].timer_switch = 1;
-    });
+    devices.forEach(d => { if (deviceStatuses[d.did]) deviceStatuses[d.did].timer_switch = 1; });
     renderDevices();
-    delayedRefresh();
+    toast(`Programme active — ${result.succeeded}/${result.total} appareils`, 'success');
+    delayedRefresh(5000);
   } catch (err) {
     toast('Erreur: ' + err.message, 'error');
+  } finally {
+    btn.classList.remove('is-busy');
+    hideProgress();
   }
 });
 
 document.getElementById('programme-off-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('programme-off-btn');
+  btn.classList.add('is-busy');
+  showProgress();
   try {
     const result = await api('POST', 'timer-all', { enabled: false });
-    toast(`Programme desactive — ${result.succeeded}/${result.total} appareils`, 'success');
-    devices.forEach(d => {
-      if (deviceStatuses[d.did]) deviceStatuses[d.did].timer_switch = 0;
-    });
+    devices.forEach(d => { if (deviceStatuses[d.did]) deviceStatuses[d.did].timer_switch = 0; });
     renderDevices();
-    delayedRefresh();
+    toast(`Programme desactive — ${result.succeeded}/${result.total} appareils`, 'success');
+    delayedRefresh(5000);
   } catch (err) {
     toast('Erreur: ' + err.message, 'error');
+  } finally {
+    btn.classList.remove('is-busy');
+    hideProgress();
   }
 });
 
@@ -400,24 +462,27 @@ document.getElementById('programme-off-btn').addEventListener('click', async () 
 document.querySelectorAll('.control-buttons .btn-mode').forEach(btn => {
   btn.addEventListener('click', async () => {
     const mode = btn.dataset.mode;
-    btn.classList.add('loading-btn');
+    btn.classList.add('is-busy');
+    showProgress();
     try {
       const result = await api('POST', 'mode-all', { mode });
-      toast(`Tous en ${MODE_LABELS[mode]} — ${result.succeeded}/${result.total}`, 'success');
-      devices.forEach(d => {
-        if (deviceStatuses[d.did]) deviceStatuses[d.did].mode = mode;
-      });
+      devices.forEach(d => { if (deviceStatuses[d.did]) deviceStatuses[d.did].mode = mode; });
       renderDevices();
+      // Flash toutes les cartes
+      const allDids = devices.map(d => d.did);
+      flashCards(allDids, mode);
+      toast(`Tous en ${MODE_LABELS[mode]} — ${result.succeeded}/${result.total}`, 'success');
       delayedRefresh(5000);
     } catch (err) {
       toast('Erreur: ' + err.message, 'error');
     } finally {
-      btn.classList.remove('loading-btn');
+      btn.classList.remove('is-busy');
+      hideProgress();
     }
   });
 });
 
-// Refresh silencieux apres un delai (laisse le temps a l'API de propager)
+// Refresh silencieux
 let refreshTimer;
 function delayedRefresh(ms = 5000) {
   clearTimeout(refreshTimer);
@@ -428,8 +493,10 @@ function delayedRefresh(ms = 5000) {
 document.getElementById('refresh-btn').addEventListener('click', async () => {
   const btn = document.getElementById('refresh-btn');
   btn.classList.add('spinning');
+  showProgress();
   await loadDevices();
   btn.classList.remove('spinning');
+  hideProgress();
 });
 
 // --- Helpers ---
@@ -457,9 +524,13 @@ function toast(msg, type = '') {
   }, type === 'error' ? 5000 : 3000);
 }
 
-// --- PWA ---
+// --- PWA : unregister old SW, register new ---
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  // Force update du service worker
+  navigator.serviceWorker.getRegistrations().then(registrations => {
+    registrations.forEach(r => r.update());
+  });
+  navigator.serviceWorker.register('sw.js?v=4').catch(() => {});
 }
 
 // --- Init ---
