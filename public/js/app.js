@@ -573,13 +573,15 @@ function toast(msg, type = '') {
   }, type === 'error' ? 5000 : 3000);
 }
 
-// --- PWA : unregister old SW, register new ---
+// --- PWA : desactiver le service worker (cause des problemes de cache) ---
 if ('serviceWorker' in navigator) {
-  // Force update du service worker
   navigator.serviceWorker.getRegistrations().then(registrations => {
-    registrations.forEach(r => r.update());
+    registrations.forEach(r => r.unregister());
   });
-  navigator.serviceWorker.register('sw.js?v=4').catch(() => {});
+  // Vider les caches
+  if (window.caches) {
+    caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+  }
 }
 
 // --- Init ---
