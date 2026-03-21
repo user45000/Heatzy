@@ -170,42 +170,17 @@ app.post(BASE_PATH + 'api/devices/:did/mode', requireAuth, async (req, res) => {
   }
 });
 
-// Mode vacances (dérogation) pour un appareil
-app.post(BASE_PATH + 'api/devices/:did/vacation', requireAuth, async (req, res) => {
+// Programme global (tous les appareils)
+// Programme global (tous les appareils)
+app.post(BASE_PATH + 'api/timer-all', requireAuth, async (req, res) => {
   try {
-    const { days } = req.body; // 0 = annuler
-    let payload;
-    if (days === 0) {
-      payload = { attrs: { derog_mode: 0 } };
-    } else {
-      payload = { attrs: { derog_mode: 1, derog_time: days || 30 } };
-    }
-    await gizwitsRequest('POST', `/control/${req.params.did}`, req.session.token, payload);
-    res.json({ success: true });
-  } catch (err) {
-    if (err.status === 401) {
-      req.session.destroy();
-      return res.status(401).json({ error: 'Session expirée' });
-    }
-    res.status(500).json({ error: 'Erreur mode vacances' });
-  }
-});
-
-// Mode vacances GLOBAL (tous les appareils)
-app.post(BASE_PATH + 'api/vacation-all', requireAuth, async (req, res) => {
-  try {
-    const { days } = req.body;
+    const { enabled } = req.body;
     const bindings = await gizwitsRequest('GET', '/bindings?limit=50&skip=0', req.session.token);
     const devices = bindings.devices || [];
 
     const results = await Promise.allSettled(
       devices.map(d => {
-        let payload;
-        if (days === 0) {
-          payload = { attrs: { derog_mode: 0 } };
-        } else {
-          payload = { attrs: { derog_mode: 1, derog_time: days || 30 } };
-        }
+        const payload = { attrs: { timer_switch: enabled ? 1 : 0 } };
         return gizwitsRequest('POST', `/control/${d.did}`, req.session.token, payload);
       })
     );
@@ -218,7 +193,7 @@ app.post(BASE_PATH + 'api/vacation-all', requireAuth, async (req, res) => {
       req.session.destroy();
       return res.status(401).json({ error: 'Session expirée' });
     }
-    res.status(500).json({ error: 'Erreur mode vacances global' });
+    res.status(500).json({ error: 'Erreur programme global' });
   }
 });
 

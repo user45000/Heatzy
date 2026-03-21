@@ -51,15 +51,15 @@
       </div>
     </header>
 
-    <!-- Vacation banner -->
-    <div class="vacation-bar">
-      <button class="btn btn-vacation" id="vacation-btn">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-3-3.87"/><path d="M7 21v-2a4 4 0 0 1 3-3.87"/><circle cx="12" cy="7" r="4"/><line x1="2" y1="2" x2="22" y2="22" stroke="#ffd93d" stroke-width="2.5"/></svg>
-        Mode Vacances — Tout couper
+    <!-- Programme global bar -->
+    <div class="programme-bar">
+      <button class="btn btn-programme-on" id="programme-on-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Programme ON — Tous
       </button>
-      <button class="btn btn-back" id="cancel-vacation-btn" hidden>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        Annuler vacances
+      <button class="btn btn-programme-off" id="programme-off-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        Programme OFF — Tous
       </button>
     </div>
 
@@ -80,22 +80,6 @@
     <!-- Loading -->
     <div id="loading" class="loading" hidden>
       <div class="spinner"></div>
-    </div>
-  </div>
-
-  <!-- Vacation modal -->
-  <div id="vacation-modal" class="modal-overlay" hidden>
-    <div class="modal">
-      <h2>Mode Vacances</h2>
-      <p>Tous les radiateurs passeront en mode hors-gel pendant la durée choisie.</p>
-      <div class="field">
-        <label for="vacation-days">Durée (jours)</label>
-        <input type="number" id="vacation-days" value="7" min="1" max="99">
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-secondary" id="vacation-cancel">Annuler</button>
-        <button class="btn btn-primary" id="vacation-confirm">Activer</button>
-      </div>
     </div>
   </div>
 

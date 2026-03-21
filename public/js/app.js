@@ -101,7 +101,6 @@ async function loadDevices() {
       deviceStatuses[d.did] = statuses[i].status === 'fulfilled' ? statuses[i].value : {};
     });
     renderDevices();
-    updateVacationButton();
   } catch (err) {
     toast('Erreur chargement: ' + err.message, 'error');
   } finally {
@@ -230,40 +229,21 @@ async function boostDevice(did, minutes = 60) {
 }
 window.boostDevice = boostDevice;
 
-// --- Vacation ---
-function updateVacationButton() {
-  const anyVacation = devices.some(d => {
-    const s = deviceStatuses[d.did];
-    return s && s.derog_mode === 1;
-  });
-  document.getElementById('cancel-vacation-btn').hidden = !anyVacation;
-}
-
-document.getElementById('vacation-btn').addEventListener('click', () => {
-  document.getElementById('vacation-modal').hidden = false;
-});
-
-document.getElementById('vacation-cancel').addEventListener('click', () => {
-  document.getElementById('vacation-modal').hidden = true;
-});
-
-document.getElementById('vacation-confirm').addEventListener('click', async () => {
-  const days = parseInt(document.getElementById('vacation-days').value) || 7;
-  document.getElementById('vacation-modal').hidden = true;
-
+// --- Programme global ON/OFF ---
+document.getElementById('programme-on-btn').addEventListener('click', async () => {
   try {
-    const result = await api('POST', 'vacation-all', { days });
-    toast(`Mode vacances activé (${days}j) — ${result.succeeded}/${result.total} appareils`, 'success');
+    const result = await api('POST', 'timer-all', { enabled: true });
+    toast(`Programme activé — ${result.succeeded}/${result.total} appareils`, 'success');
     await loadDevices();
   } catch (err) {
     toast('Erreur: ' + err.message, 'error');
   }
 });
 
-document.getElementById('cancel-vacation-btn').addEventListener('click', async () => {
+document.getElementById('programme-off-btn').addEventListener('click', async () => {
   try {
-    const result = await api('POST', 'vacation-all', { days: 0 });
-    toast(`Vacances annulées — ${result.succeeded}/${result.total} appareils`, 'success');
+    const result = await api('POST', 'timer-all', { enabled: false });
+    toast(`Programme désactivé — ${result.succeeded}/${result.total} appareils`, 'success');
     await loadDevices();
   } catch (err) {
     toast('Erreur: ' + err.message, 'error');
