@@ -10,15 +10,6 @@ const BASE_PATH = process.env.BASE_PATH || '/';
 const GIZWITS_API = 'https://euapi.gizwits.com/app';
 const APP_ID = 'c70a66ff039d41b4a220e198b0fcc8b3';
 
-const V1_PRODUCT_KEYS = ['9420ae048da545c88fc6274d204dd25f'];
-
-const V1_MODES = {
-  cft:  [1, 1, 0],
-  eco:  [1, 1, 1],
-  fro:  [1, 1, 2],
-  stop: [1, 1, 3]
-};
-
 app.use(express.json());
 app.use(session({
   secret: process.env.SESSION_SECRET || 'heatzy-web-secret-key-change-in-prod',
@@ -29,7 +20,7 @@ app.use(session({
 
 app.use(BASE_PATH, express.static(path.join(__dirname, 'public')));
 
-// --- Helper : requete Gizwits ---
+// --- Requete Gizwits ---
 function gizwitsRequest(method, endpoint, token, body) {
   return new Promise((resolve, reject) => {
     const url = new URL(GIZWITS_API + endpoint);
@@ -65,52 +56,37 @@ function gizwitsRequest(method, endpoint, token, body) {
   });
 }
 
-// --- Helper : pause ---
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-// --- Helper : envoyer une commande avec retry + verification ---
-async function sendWithRetry(did, token, payload, expectedMode, maxRetries = 3) {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+// Envoyer une commande a un appareil (simple, 1 retry si erreur)
+async function sendCommand(did, token, payload) {
+  try {
+    await gizwitsRequest('POST', `/control/${did}`, token, payload);
+    return true;
+  } catch (err) {
+    // 1 retry apres 1s
+    await sleep(1000);
     try {
       await gizwitsRequest('POST', `/control/${did}`, token, payload);
-    } catch (err) {
-      if (attempt === maxRetries) throw err;
-      await sleep(1000);
-      continue;
+      return true;
+    } catch (err2) {
+      return false;
     }
-
-    // Verifier que le changement a pris (attendre un peu)
-    if (expectedMode) {
-      await sleep(1500);
-      try {
-        const status = await gizwitsRequest('GET', `/devdata/${did}/latest`, token);
-        const attrs = status.attr || status.attrs || {};
-        // Normaliser le mode (V1 retourne un nombre)
-        let currentMode = attrs.mode;
-        if (typeof currentMode === 'number') {
-          const map = { 0: 'cft', 1: 'eco', 2: 'fro', 3: 'stop' };
-          currentMode = map[currentMode] || 'stop';
-        }
-        if (currentMode === expectedMode) {
-          return { verified: true, attempt };
-        }
-        // Mode pas change, on retente
-        if (attempt < maxRetries) {
-          await sleep(500);
-          continue;
-        }
-      } catch (e) {
-        // Erreur de lecture, on considere que c'est OK
-        return { verified: false, attempt };
-      }
-    }
-
-    return { verified: !expectedMode, attempt };
   }
-  return { verified: false, attempt: maxRetries };
 }
 
-// --- Middleware auth ---
+// Envoyer une commande a plusieurs appareils sequentiellement (300ms entre chaque)
+async function sendToAll(devices, token, payloadFn) {
+  let succeeded = 0;
+  for (const d of devices) {
+    const payload = payloadFn(d);
+    const ok = await sendCommand(d.did, token, payload);
+    if (ok) succeeded++;
+    await sleep(300);
+  }
+  return { total: devices.length, succeeded, failed: devices.length - succeeded };
+}
+
 function requireAuth(req, res, next) {
   if (!req.session.token) return res.status(401).json({ error: 'Non authentifie' });
   next();
@@ -118,7 +94,6 @@ function requireAuth(req, res, next) {
 
 // --- Routes ---
 
-// Login
 app.post(BASE_PATH + 'api/login', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -132,13 +107,11 @@ app.post(BASE_PATH + 'api/login', async (req, res) => {
   }
 });
 
-// Logout
 app.post(BASE_PATH + 'api/logout', (req, res) => {
   req.session.destroy();
   res.json({ success: true });
 });
 
-// Auth status
 app.get(BASE_PATH + 'api/auth', (req, res) => {
   res.json({ authenticated: !!req.session.token });
 });
@@ -151,10 +124,8 @@ app.get(BASE_PATH + 'api/devices', requireAuth, async (req, res) => {
       did: d.did,
       name: d.dev_alias || d.product_name || 'Sans nom',
       product_key: d.product_key,
-      product_name: d.product_name,
       mac: d.mac,
-      is_online: d.is_online,
-      is_v1: V1_PRODUCT_KEYS.includes(d.product_key)
+      is_online: d.is_online
     }));
     res.json(devices);
   } catch (err) {
@@ -167,20 +138,14 @@ app.get(BASE_PATH + 'api/devices', requireAuth, async (req, res) => {
 app.get(BASE_PATH + 'api/devices/:did/status', requireAuth, async (req, res) => {
   try {
     const result = await gizwitsRequest('GET', `/devdata/${req.params.did}/latest`, req.session.token);
-    const attrs = result.attr || result.attrs || {};
-    // Normaliser le mode : V1 retourne parfois un nombre au lieu d'une string
-    if (typeof attrs.mode === 'number') {
-      const V1_MODE_MAP = { 0: 'cft', 1: 'eco', 2: 'fro', 3: 'stop' };
-      attrs.mode = V1_MODE_MAP[attrs.mode] || 'stop';
-    }
-    res.json(attrs);
+    res.json(result.attr || result.attrs || {});
   } catch (err) {
     if (err.status === 401) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
     res.status(500).json({ error: 'Erreur API' });
   }
 });
 
-// Debug : retourne les donnees brutes de l'API pour un appareil
+// Debug raw
 app.get(BASE_PATH + 'api/devices/:did/raw', requireAuth, async (req, res) => {
   try {
     const result = await gizwitsRequest('GET', `/devdata/${req.params.did}/latest`, req.session.token);
@@ -191,32 +156,29 @@ app.get(BASE_PATH + 'api/devices/:did/raw', requireAuth, async (req, res) => {
   }
 });
 
-// Changer le mode d'un appareil (avec retry + verif + desactivation programme)
+// Changer le mode d'un appareil
 app.post(BASE_PATH + 'api/devices/:did/mode', requireAuth, async (req, res) => {
   try {
-    const { mode, is_v1 } = req.body;
-    const did = req.params.did;
-    const token = req.session.token;
-
-    // 1. Desactiver le programme pour eviter qu'il ecrase le changement
-    try {
-      await gizwitsRequest('POST', `/control/${did}`, token, { attrs: { timer_switch: 0 } });
-      await sleep(500);
-    } catch (e) { /* on continue meme si ca echoue */ }
-
-    // 2. Envoyer le mode avec retry
-    let payload;
-    if (is_v1 && V1_MODES[mode]) {
-      payload = { raw: V1_MODES[mode] };
-    } else {
-      payload = { attrs: { mode } };
-    }
-
-    const result = await sendWithRetry(did, token, payload, is_v1 ? null : mode);
-    res.json({ success: true, verified: result.verified, attempts: result.attempt });
+    const { mode } = req.body;
+    const ok = await sendCommand(req.params.did, req.session.token, { attrs: { mode } });
+    res.json({ success: ok });
   } catch (err) {
     if (err.status === 401) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
     res.status(500).json({ error: 'Erreur changement de mode' });
+  }
+});
+
+// Mode global — sequentiel avec 300ms entre chaque
+app.post(BASE_PATH + 'api/mode-all', requireAuth, async (req, res) => {
+  try {
+    const { mode } = req.body;
+    const bindings = await gizwitsRequest('GET', '/bindings?limit=50&skip=0', req.session.token);
+    const devices = bindings.devices || [];
+    const result = await sendToAll(devices, req.session.token, () => ({ attrs: { mode } }));
+    res.json({ success: true, ...result });
+  } catch (err) {
+    if (err.status === 401) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
+    res.status(500).json({ error: 'Erreur mode global' });
   }
 });
 
@@ -226,66 +188,20 @@ app.post(BASE_PATH + 'api/timer-all', requireAuth, async (req, res) => {
     const { enabled } = req.body;
     const bindings = await gizwitsRequest('GET', '/bindings?limit=50&skip=0', req.session.token);
     const devices = bindings.devices || [];
-
-    const results = await Promise.allSettled(
-      devices.map(async (d) => {
-        const payload = { attrs: { timer_switch: enabled ? 1 : 0 } };
-        return sendWithRetry(d.did, req.session.token, payload, null, 2);
-      })
-    );
-
-    const succeeded = results.filter(r => r.status === 'fulfilled').length;
-    res.json({ success: true, total: devices.length, succeeded, failed: devices.length - succeeded });
+    const result = await sendToAll(devices, req.session.token, () => ({ attrs: { timer_switch: enabled ? 1 : 0 } }));
+    res.json({ success: true, ...result });
   } catch (err) {
     if (err.status === 401) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
     res.status(500).json({ error: 'Erreur programme global' });
   }
 });
 
-// Mode global (avec desactivation programme + retry)
-app.post(BASE_PATH + 'api/mode-all', requireAuth, async (req, res) => {
-  try {
-    const { mode } = req.body;
-    const bindings = await gizwitsRequest('GET', '/bindings?limit=50&skip=0', req.session.token);
-    const devices = bindings.devices || [];
-
-    // D'abord desactiver le programme sur tous
-    await Promise.allSettled(
-      devices.map(d =>
-        gizwitsRequest('POST', `/control/${d.did}`, req.session.token, { attrs: { timer_switch: 0 } })
-      )
-    );
-    await sleep(800);
-
-    // Puis changer le mode avec retry
-    const results = await Promise.allSettled(
-      devices.map(async (d) => {
-        let payload;
-        if (V1_PRODUCT_KEYS.includes(d.product_key) && V1_MODES[mode]) {
-          payload = { raw: V1_MODES[mode] };
-        } else {
-          payload = { attrs: { mode } };
-        }
-        return sendWithRetry(d.did, req.session.token, payload,
-          V1_PRODUCT_KEYS.includes(d.product_key) ? null : mode, 3);
-      })
-    );
-
-    const succeeded = results.filter(r => r.status === 'fulfilled').length;
-    const verified = results.filter(r => r.status === 'fulfilled' && r.value.verified).length;
-    res.json({ success: true, total: devices.length, succeeded, verified, failed: devices.length - succeeded });
-  } catch (err) {
-    if (err.status === 401) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
-    res.status(500).json({ error: 'Erreur mode global' });
-  }
-});
-
-// Planning on/off
+// Planning individuel
 app.post(BASE_PATH + 'api/devices/:did/timer', requireAuth, async (req, res) => {
   try {
     const { enabled } = req.body;
-    await sendWithRetry(req.params.did, req.session.token, { attrs: { timer_switch: enabled ? 1 : 0 } }, null, 2);
-    res.json({ success: true });
+    const ok = await sendCommand(req.params.did, req.session.token, { attrs: { timer_switch: enabled ? 1 : 0 } });
+    res.json({ success: ok });
   } catch (err) {
     if (err.status === 401) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
     res.status(500).json({ error: 'Erreur planning' });
@@ -296,8 +212,8 @@ app.post(BASE_PATH + 'api/devices/:did/timer', requireAuth, async (req, res) => 
 app.post(BASE_PATH + 'api/devices/:did/lock', requireAuth, async (req, res) => {
   try {
     const { enabled } = req.body;
-    await sendWithRetry(req.params.did, req.session.token, { attrs: { lock_switch: enabled ? 1 : 0 } }, null, 2);
-    res.json({ success: true });
+    const ok = await sendCommand(req.params.did, req.session.token, { attrs: { lock_switch: enabled ? 1 : 0 } });
+    res.json({ success: ok });
   } catch (err) {
     if (err.status === 401) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
     res.status(500).json({ error: 'Erreur verrouillage' });
@@ -314,8 +230,8 @@ app.post(BASE_PATH + 'api/devices/:did/boost', requireAuth, async (req, res) => 
     } else {
       payload = { attrs: { derog_mode: 2, derog_time: minutes || 60 } };
     }
-    await sendWithRetry(req.params.did, req.session.token, payload, null, 2);
-    res.json({ success: true });
+    const ok = await sendCommand(req.params.did, req.session.token, payload);
+    res.json({ success: ok });
   } catch (err) {
     if (err.status === 401) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
     res.status(500).json({ error: 'Erreur boost' });

@@ -316,26 +316,12 @@ document.getElementById('devices').addEventListener('click', async (e) => {
   try {
     if (action === 'mode') {
       const mode = btn.dataset.mode;
-      // Envoi sequentiel pour les groupes (evite de surcharger l'API)
-      const results = [];
-      for (let i = 0; i < dids.length; i++) {
-        const r = await api('POST', `devices/${dids[i]}/mode`, { mode, is_v1: isV1s ? isV1s[i] : false });
-        results.push(r);
+      for (const did of dids) {
+        await api('POST', `devices/${did}/mode`, { mode });
       }
-      const verified = results.filter(r => r.verified).length;
-      const total = dids.length;
-      if (verified === total) {
-        toast(`${label} → ${MODE_LABELS[mode]} (verifie)`, 'success');
-      } else if (verified > 0) {
-        toast(`${label} → ${MODE_LABELS[mode]} (${verified}/${total} verifies)`, 'success');
-      } else {
-        toast(`${label} → ${MODE_LABELS[mode]} (en cours...)`, 'success');
-      }
+      toast(`${label} → ${MODE_LABELS[mode]}`, 'success');
       dids.forEach(did => {
-        if (deviceStatuses[did]) {
-          deviceStatuses[did].mode = mode;
-          deviceStatuses[did].timer_switch = 0; // Programme desactive par le serveur
-        }
+        if (deviceStatuses[did]) deviceStatuses[did].mode = mode;
       });
 
     } else if (action === 'timer') {
@@ -417,15 +403,9 @@ document.querySelectorAll('.control-buttons .btn-mode').forEach(btn => {
     btn.classList.add('loading-btn');
     try {
       const result = await api('POST', 'mode-all', { mode });
-      const msg = result.verified !== undefined
-        ? `Tous en ${MODE_LABELS[mode]} — ${result.verified}/${result.total} verifies`
-        : `Tous en ${MODE_LABELS[mode]} — ${result.succeeded}/${result.total}`;
-      toast(msg, 'success');
+      toast(`Tous en ${MODE_LABELS[mode]} — ${result.succeeded}/${result.total}`, 'success');
       devices.forEach(d => {
-        if (deviceStatuses[d.did]) {
-          deviceStatuses[d.did].mode = mode;
-          deviceStatuses[d.did].timer_switch = 0;
-        }
+        if (deviceStatuses[d.did]) deviceStatuses[d.did].mode = mode;
       });
       renderDevices();
       delayedRefresh(5000);
