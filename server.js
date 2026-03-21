@@ -11,6 +11,10 @@ const BASE_PATH = process.env.BASE_PATH || '/';
 const GIZWITS_API = 'https://euapi.gizwits.com/app';
 const APP_ID = 'c70a66ff039d41b4a220e198b0fcc8b3';
 
+// Cache serveur des modes envoyes (pallier les lectures obsoletes de Gizwits)
+// Cle: did, valeur: { mode, ts }
+const sentModes = {};
+
 app.use(express.json());
 app.use(session({
   store: new FileStore({
@@ -94,14 +98,22 @@ async function sendToAll(devices, token, payloadFn) {
   return { total: devices.length, succeeded, failed: devices.length - succeeded };
 }
 
-// Envoyer un mode a tous : commande atomique mode + timer_switch en un seul appel
+// Envoyer un mode a tous
 async function sendModeToAll(devices, token, mode) {
   let succeeded = 0;
+  // 1er passage : envoyer le mode
   for (const d of devices) {
-    // Envoyer mode + desactiver programme en UNE seule commande (evite les race conditions)
-    const ok = await sendCommand(d.did, token, { attrs: { mode, timer_switch: 0 } });
+    const ok = await sendCommand(d.did, token, { attrs: { mode } });
     if (ok) succeeded++;
-    await sleep(400);
+    sentModes[d.did] = { mode, ts: Date.now() };
+    await sleep(300);
+  }
+
+  // 2e passage apres 2s : renvoyer pour fiabiliser (surtout le mode stop)
+  await sleep(2000);
+  for (const d of devices) {
+    await sendCommand(d.did, token, { attrs: { mode } });
+    await sleep(300);
   }
 
   return { total: devices.length, succeeded, failed: devices.length - succeeded };
@@ -188,8 +200,21 @@ app.get(BASE_PATH + 'api/devices/:did/status', requireAuth, async (req, res) => 
   try {
     const result = await gizwitsRequest('GET', `/devdata/${req.params.did}/latest`, req.session.token);
     const attrs = result.attr || result.attrs || {};
-    // Inclure le timestamp de mise a jour pour detecter les donnees obsoletes
     if (result.updated_at) attrs._updated_at = result.updated_at;
+
+    // Si on a envoye un mode recemment (< 5 min) et que l'API retourne autre chose,
+    // utiliser notre valeur (l'API Gizwits a un cache en lecture)
+    const sent = sentModes[req.params.did];
+    if (sent && (Date.now() - sent.ts) < 5 * 60 * 1000) {
+      if (attrs.mode !== sent.mode) {
+        attrs.mode = sent.mode;
+        attrs._overridden = true;
+      }
+    } else if (sent) {
+      // Expire apres 5 min
+      delete sentModes[req.params.did];
+    }
+
     res.json(attrs);
   } catch (err) {
     if (err.status === 401) {
@@ -220,8 +245,14 @@ app.get(BASE_PATH + 'api/devices/:did/raw', requireAuth, async (req, res) => {
 app.post(BASE_PATH + 'api/devices/:did/mode', requireAuth, async (req, res) => {
   try {
     const { mode } = req.body;
-    // Commande atomique : mode + desactiver programme
-    const ok = await sendCommand(req.params.did, req.session.token, { attrs: { mode, timer_switch: 0 } });
+    const ok = await sendCommand(req.params.did, req.session.token, { attrs: { mode } });
+    // Double envoi pour stop (ce mode se perd parfois)
+    if (mode === 'stop') {
+      await sleep(1500);
+      await sendCommand(req.params.did, req.session.token, { attrs: { mode } });
+    }
+    // Sauvegarder pour pallier les lectures obsoletes
+    sentModes[req.params.did] = { mode, ts: Date.now() };
     res.json({ success: ok });
   } catch (err) {
     if (err.status === 401) {
