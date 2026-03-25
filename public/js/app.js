@@ -394,15 +394,54 @@ setInterval(updateLastRefreshDisplay, 10000);
 // --- Simple mode ---
 async function loadDevicesSimple() {
   const statusEl = document.getElementById('simple-status');
-  statusEl.textContent = 'Chargement...';
+  statusEl.innerHTML = '<span style="color:var(--t3)">Chargement...</span>';
   try {
     devices = await api('GET','devices');
-    const online = devices.filter(d=>d.is_online).length;
-    const offline = devices.filter(d=>!d.is_online).length;
-    let txt = `<span class="s-ok">${online} en ligne</span>`;
-    if (offline > 0) txt += ` · <span class="s-warn">${offline} hors ligne</span>`;
-    statusEl.innerHTML = txt;
-  } catch(e) { statusEl.textContent = ''; }
+    deviceStatuses = {};
+    for (const d of devices) {
+      if (d.is_online) {
+        try { deviceStatuses[d.did] = await api('GET',`devices/${d.did}/status`); }
+        catch { deviceStatuses[d.did] = { _error: true }; }
+        await new Promise(r=>setTimeout(r,200));
+      }
+    }
+    renderSimpleStatus();
+  } catch(e) { statusEl.innerHTML = '<span class="s-warn">Erreur de connexion</span>'; }
+}
+
+function renderSimpleStatus() {
+  const statusEl = document.getElementById('simple-status');
+  const online = devices.filter(d=>d.is_online).length;
+  const offline = devices.filter(d=>!d.is_online).length;
+  let txt = `<div class="sl-count"><span class="s-ok">${online} en ligne</span>`;
+  if (offline > 0) txt += ` · <span class="s-warn">${offline} hors ligne</span>`;
+  txt += `</div><div class="sl-list">`;
+  const now = Date.now() / 1000;
+  for (const d of devices) {
+    const s = deviceStatuses[d.did] || {};
+    const mode = s.mode || 'stop';
+    const timerOn = s.timer_switch === 1;
+    const stale = !s._error && s._updated_at && (now - s._updated_at) > 1800;
+    const uncertain = s._error || stale;
+    let modeBadge;
+    if (!d.is_online) {
+      modeBadge = `<span class="sl-badge sl-offline">Hors ligne</span>`;
+    } else if (uncertain) {
+      modeBadge = `<span class="sl-badge sl-unknown" title="${s._error?'Erreur API':'Donnée ancienne'}">? Incertain</span>`;
+    } else {
+      const cls = {cft:'sl-cft',eco:'sl-eco',fro:'sl-fro',stop:'sl-stop'};
+      modeBadge = `<span class="sl-badge ${cls[mode]||'sl-stop'}">${MODE_EMOJI[mode]} ${MODE_LABELS[mode]}</span>`;
+    }
+    let progBadge = '';
+    if (d.is_online && !s._error) {
+      progBadge = timerOn
+        ? `<span class="sl-prog sl-prog-on">Prog</span>`
+        : `<span class="sl-prog sl-prog-off">Manuel</span>`;
+    }
+    txt += `<div class="sl-row"><span class="sl-name">${esc(d.name)}</span><span class="sl-right">${progBadge}${modeBadge}</span></div>`;
+  }
+  txt += `</div>`;
+  statusEl.innerHTML = txt;
 }
 
 // Simple mode buttons
