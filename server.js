@@ -3,20 +3,44 @@ const session = require('express-session');
 const FileStore = require('session-file-store')(session);
 const path = require('path');
 const https = require('https');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3002;
 const BASE_PATH = process.env.BASE_PATH || '/';
 
-const fs = require('fs');
-
 const GIZWITS_API = 'https://euapi.gizwits.com/app';
 const APP_ID = 'c70a66ff039d41b4a220e198b0fcc8b3';
 
-// Cache serveur des modes envoyes
+// ── Credentials Heatzy (côté serveur, jamais en session) ──────────────
+const HEATZY_USER = 'francois.ribollet@gmail.com';
+const HEATZY_PASS = 'cextun-cuPrev-8befzi';
+
+// ── Token Gizwits partagé (géré côté serveur) ─────────────────────────
+let _token = null;
+let _tokenExpiry = 0;
+
+async function getHeatzyToken(forceRefresh = false) {
+  if (!forceRefresh && _token && Date.now() < _tokenExpiry - 60_000) {
+    return _token;
+  }
+  const result = await gizwitsRequest('POST', '/login', null, {
+    username: HEATZY_USER,
+    password: HEATZY_PASS,
+    lang: 'en'
+  });
+  _token = result.token;
+  _tokenExpiry = result.expire_at * 1000;
+  return _token;
+}
+
+// Initialiser le token au démarrage (silencieux)
+getHeatzyToken().catch(e => console.warn('Heatzy init token failed:', e.error || e));
+
+// ── Cache serveur des modes envoyés ───────────────────────────────────
 const sentModes = {};
 
-// Exclusions : liste des did exclus des actions globales (sauf OFF/Prog OFF)
+// ── Exclusions ────────────────────────────────────────────────────────
 const EXCLUSIONS_FILE = path.join(__dirname, 'exclusions.json');
 function loadExclusions() {
   try { return JSON.parse(fs.readFileSync(EXCLUSIONS_FILE, 'utf8')); }
@@ -26,23 +50,26 @@ function saveExclusions(list) {
   fs.writeFileSync(EXCLUSIONS_FILE, JSON.stringify(list), 'utf8');
 }
 
+// ── Session (côté utilisateur) ────────────────────────────────────────
 app.use(express.json());
 app.use(session({
   store: new FileStore({
     path: path.join(__dirname, 'sessions'),
-    ttl: 365 * 24 * 60 * 60, // 1 an en secondes
+    ttl: 10 * 365 * 24 * 60 * 60, // 10 ans
     retries: 0,
     logFn: () => {}
   }),
   secret: process.env.SESSION_SECRET || 'heatzy-web-secret-key-change-in-prod',
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 365 * 24 * 60 * 60 * 1000 } // 1 an
+  cookie: {
+    maxAge: 10 * 365 * 24 * 60 * 60 * 1000 // 10 ans
+  }
 }));
 
 app.use(BASE_PATH, express.static(path.join(__dirname, 'public')));
 
-// --- Requete Gizwits ---
+// ── Requête Gizwits ───────────────────────────────────────────────────
 function gizwitsRequest(method, endpoint, token, body) {
   return new Promise((resolve, reject) => {
     const url = new URL(GIZWITS_API + endpoint);
@@ -57,7 +84,6 @@ function gizwitsRequest(method, endpoint, token, body) {
       }
     };
     if (token) options.headers['X-Gizwits-User-token'] = token;
-
     const req = https.request(options, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
@@ -80,99 +106,82 @@ function gizwitsRequest(method, endpoint, token, body) {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-// Envoyer une commande a un appareil (simple, 1 retry si erreur)
-async function sendCommand(did, token, payload) {
+// Appel Gizwits avec retry automatique si token expiré
+async function gizwitsCall(method, endpoint, body) {
+  let token = await getHeatzyToken();
   try {
-    await gizwitsRequest('POST', `/control/${did}`, token, payload);
-    return true;
+    return await gizwitsRequest(method, endpoint, token, body);
   } catch (err) {
-    // 1 retry apres 1s
+    if (err.status === 401) {
+      token = await getHeatzyToken(true); // force refresh
+      return await gizwitsRequest(method, endpoint, token, body);
+    }
+    throw err;
+  }
+}
+
+async function sendCommand(did, payload) {
+  try {
+    await gizwitsCall('POST', `/control/${did}`, payload);
+    return true;
+  } catch {
     await sleep(1000);
     try {
-      await gizwitsRequest('POST', `/control/${did}`, token, payload);
+      await gizwitsCall('POST', `/control/${did}`, payload);
       return true;
-    } catch (err2) {
+    } catch {
       return false;
     }
   }
 }
 
-// Envoyer une commande a plusieurs appareils sequentiellement (300ms entre chaque)
-async function sendToAll(devices, token, payloadFn) {
+async function sendToAll(devices, payloadFn) {
   let succeeded = 0;
   for (const d of devices) {
-    const payload = payloadFn(d);
-    const ok = await sendCommand(d.did, token, payload);
+    const ok = await sendCommand(d.did, payloadFn(d));
     if (ok) succeeded++;
     await sleep(300);
   }
   return { total: devices.length, succeeded, failed: devices.length - succeeded };
 }
 
-// Envoyer un mode a tous
-async function sendModeToAll(devices, token, mode) {
+async function sendModeToAll(devices, mode) {
   let succeeded = 0;
-  // 1er passage : envoyer le mode
   for (const d of devices) {
-    const ok = await sendCommand(d.did, token, { attrs: { mode } });
+    const ok = await sendCommand(d.did, { attrs: { mode } });
     if (ok) succeeded++;
     sentModes[d.did] = { mode, ts: Date.now() };
     await sleep(300);
   }
-
-  // 2e passage apres 2s : renvoyer pour fiabiliser (surtout le mode stop)
   await sleep(2000);
   for (const d of devices) {
-    await sendCommand(d.did, token, { attrs: { mode } });
+    await sendCommand(d.did, { attrs: { mode } });
     await sleep(300);
   }
-
   return { total: devices.length, succeeded, failed: devices.length - succeeded };
 }
 
-// Re-login automatique si le token Gizwits a expire
-async function refreshTokenIfNeeded(req) {
-  if (!req.session.credentials) return false;
-  try {
-    const result = await gizwitsRequest('POST', '/login', null, {
-      username: req.session.credentials.username,
-      password: req.session.credentials.password,
-      lang: 'en'
-    });
-    req.session.token = result.token;
-    req.session.expireAt = result.expire_at;
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-async function requireAuth(req, res, next) {
-  if (!req.session.token) {
-    // Tenter un re-login si on a les credentials
-    if (req.session.credentials) {
-      const ok = await refreshTokenIfNeeded(req);
-      if (ok) return next();
-    }
+// ── Auth middleware ───────────────────────────────────────────────────
+function requireAuth(req, res, next) {
+  if (!req.session.authenticated) {
     return res.status(401).json({ error: 'Non authentifie' });
   }
   next();
 }
 
-// --- Routes ---
+// ── Routes auth ───────────────────────────────────────────────────────
 
-app.post(BASE_PATH + 'api/login', async (req, res) => {
-  try {
-    const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ error: 'Email et mot de passe requis' });
-    const result = await gizwitsRequest('POST', '/login', null, { username, password, lang: 'en' });
-    req.session.token = result.token;
-    req.session.expireAt = result.expire_at;
-    req.session.credentials = { username, password };
-    res.json({ success: true });
-  } catch (err) {
-    res.status(401).json({ error: 'Identifiants incorrects' });
+// Login : vérification locale des credentials (pas d'appel API)
+app.post(BASE_PATH + 'api/login', (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Email et mot de passe requis' });
   }
+  if (username !== HEATZY_USER || password !== HEATZY_PASS) {
+    return res.status(401).json({ error: 'Identifiants incorrects' });
+  }
+  req.session.authenticated = true;
+  res.json({ success: true });
 });
 
 app.post(BASE_PATH + 'api/logout', (req, res) => {
@@ -181,13 +190,14 @@ app.post(BASE_PATH + 'api/logout', (req, res) => {
 });
 
 app.get(BASE_PATH + 'api/auth', (req, res) => {
-  res.json({ authenticated: !!req.session.token });
+  res.json({ authenticated: !!req.session.authenticated });
 });
 
-// Lister les appareils
+// ── Routes appareils ──────────────────────────────────────────────────
+
 app.get(BASE_PATH + 'api/devices', requireAuth, async (req, res) => {
   try {
-    const result = await gizwitsRequest('GET', '/bindings?limit=50&skip=0', req.session.token);
+    const result = await gizwitsCall('GET', '/bindings?limit=50&skip=0');
     const devices = (result.devices || []).map(d => ({
       did: d.did,
       name: d.dev_alias || d.product_name || 'Sans nom',
@@ -197,191 +207,123 @@ app.get(BASE_PATH + 'api/devices', requireAuth, async (req, res) => {
     }));
     res.json(devices);
   } catch (err) {
-    if (err.status === 401) {
-      const ok = await refreshTokenIfNeeded(req);
-      if (!ok) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
-      return res.status(503).json({ error: 'Token renouvele, reessayez' });
-    }
     res.status(500).json({ error: 'Erreur API' });
   }
 });
 
-// Statut d'un appareil
 app.get(BASE_PATH + 'api/devices/:did/status', requireAuth, async (req, res) => {
   try {
-    const result = await gizwitsRequest('GET', `/devdata/${req.params.did}/latest`, req.session.token);
+    const result = await gizwitsCall('GET', `/devdata/${req.params.did}/latest`);
     const attrs = result.attr || result.attrs || {};
     if (result.updated_at) attrs._updated_at = result.updated_at;
-
-    // Si on a envoye un mode recemment (< 5 min) et que l'API retourne autre chose,
-    // utiliser notre valeur (l'API Gizwits a un cache en lecture)
     const sent = sentModes[req.params.did];
     if (sent && (Date.now() - sent.ts) < 5 * 60 * 1000) {
-      if (attrs.mode !== sent.mode) {
-        attrs.mode = sent.mode;
-        attrs._overridden = true;
-      }
+      if (attrs.mode !== sent.mode) { attrs.mode = sent.mode; attrs._overridden = true; }
     } else if (sent) {
-      // Expire apres 5 min
       delete sentModes[req.params.did];
     }
-
     res.json(attrs);
   } catch (err) {
-    if (err.status === 401) {
-      const ok = await refreshTokenIfNeeded(req);
-      if (!ok) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
-      return res.status(503).json({ error: 'Token renouvele, reessayez' });
-    }
     res.status(500).json({ error: 'Erreur API' });
   }
 });
 
-// Debug raw
 app.get(BASE_PATH + 'api/devices/:did/raw', requireAuth, async (req, res) => {
   try {
-    const result = await gizwitsRequest('GET', `/devdata/${req.params.did}/latest`, req.session.token);
+    const result = await gizwitsCall('GET', `/devdata/${req.params.did}/latest`);
     res.json(result);
   } catch (err) {
-    if (err.status === 401) {
-      const ok = await refreshTokenIfNeeded(req);
-      if (!ok) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
-      return res.status(503).json({ error: 'Token renouvele, reessayez' });
-    }
     res.status(500).json({ error: 'Erreur API', details: err });
   }
 });
 
-// Changer le mode d'un appareil
 app.post(BASE_PATH + 'api/devices/:did/mode', requireAuth, async (req, res) => {
   try {
     const { mode } = req.body;
-    const ok = await sendCommand(req.params.did, req.session.token, { attrs: { mode } });
-    // Double envoi pour stop (ce mode se perd parfois)
+    const ok = await sendCommand(req.params.did, { attrs: { mode } });
     if (mode === 'stop') {
       await sleep(1500);
-      await sendCommand(req.params.did, req.session.token, { attrs: { mode } });
+      await sendCommand(req.params.did, { attrs: { mode } });
     }
-    // Sauvegarder pour pallier les lectures obsoletes
     sentModes[req.params.did] = { mode, ts: Date.now() };
     res.json({ success: ok });
   } catch (err) {
-    if (err.status === 401) {
-      const ok = await refreshTokenIfNeeded(req);
-      if (!ok) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
-      return res.status(503).json({ error: 'Token renouvele, reessayez' });
-    }
     res.status(500).json({ error: 'Erreur changement de mode' });
   }
 });
 
-// Exclusions API
 app.get(BASE_PATH + 'api/exclusions', requireAuth, (req, res) => {
   res.json(loadExclusions());
 });
+
 app.post(BASE_PATH + 'api/exclusions', requireAuth, (req, res) => {
-  const { excluded } = req.body; // array of did strings
+  const { excluded } = req.body;
   if (!Array.isArray(excluded)) return res.status(400).json({ error: 'excluded doit etre un tableau' });
   saveExclusions(excluded);
   res.json({ success: true, excluded });
 });
 
-// Mode global — avec exclusions (sauf stop qui s'applique a tous)
 app.post(BASE_PATH + 'api/mode-all', requireAuth, async (req, res) => {
   try {
     const { mode, force } = req.body;
-    const bindings = await gizwitsRequest('GET', '/bindings?limit=50&skip=0', req.session.token);
+    const bindings = await gizwitsCall('GET', '/bindings?limit=50&skip=0');
     let devices = (bindings.devices || []).filter(d => d.is_online);
-    // stop et force s'appliquent a tous, les autres respectent les exclusions
     if (mode !== 'stop' && !force) {
       const excl = loadExclusions();
       devices = devices.filter(d => !excl.includes(d.did));
     }
-    const result = await sendModeToAll(devices, req.session.token, mode);
+    const result = await sendModeToAll(devices, mode);
     res.json({ success: true, ...result });
   } catch (err) {
-    if (err.status === 401) {
-      const ok = await refreshTokenIfNeeded(req);
-      if (!ok) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
-      return res.status(503).json({ error: 'Token renouvele, reessayez' });
-    }
     res.status(500).json({ error: 'Erreur mode global' });
   }
 });
 
-// Programme global — avec exclusions (sauf desactivation qui s'applique a tous)
 app.post(BASE_PATH + 'api/timer-all', requireAuth, async (req, res) => {
   try {
     const { enabled } = req.body;
-    const bindings = await gizwitsRequest('GET', '/bindings?limit=50&skip=0', req.session.token);
+    const bindings = await gizwitsCall('GET', '/bindings?limit=50&skip=0');
     let devices = bindings.devices || [];
-    // Desactiver s'applique a tous, activer respecte les exclusions
     if (enabled) {
       const excl = loadExclusions();
       devices = devices.filter(d => !excl.includes(d.did));
     }
-    const result = await sendToAll(devices, req.session.token, () => ({ attrs: { timer_switch: enabled ? 1 : 0 } }));
+    const result = await sendToAll(devices, () => ({ attrs: { timer_switch: enabled ? 1 : 0 } }));
     res.json({ success: true, ...result });
   } catch (err) {
-    if (err.status === 401) {
-      const ok = await refreshTokenIfNeeded(req);
-      if (!ok) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
-      return res.status(503).json({ error: 'Token renouvele, reessayez' });
-    }
     res.status(500).json({ error: 'Erreur programme global' });
   }
 });
 
-// Planning individuel
 app.post(BASE_PATH + 'api/devices/:did/timer', requireAuth, async (req, res) => {
   try {
     const { enabled } = req.body;
-    const ok = await sendCommand(req.params.did, req.session.token, { attrs: { timer_switch: enabled ? 1 : 0 } });
+    const ok = await sendCommand(req.params.did, { attrs: { timer_switch: enabled ? 1 : 0 } });
     res.json({ success: ok });
   } catch (err) {
-    if (err.status === 401) {
-      const ok = await refreshTokenIfNeeded(req);
-      if (!ok) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
-      return res.status(503).json({ error: 'Token renouvele, reessayez' });
-    }
     res.status(500).json({ error: 'Erreur planning' });
   }
 });
 
-// Verrouillage
 app.post(BASE_PATH + 'api/devices/:did/lock', requireAuth, async (req, res) => {
   try {
     const { enabled } = req.body;
-    const ok = await sendCommand(req.params.did, req.session.token, { attrs: { lock_switch: enabled ? 1 : 0 } });
+    const ok = await sendCommand(req.params.did, { attrs: { lock_switch: enabled ? 1 : 0 } });
     res.json({ success: ok });
   } catch (err) {
-    if (err.status === 401) {
-      const ok = await refreshTokenIfNeeded(req);
-      if (!ok) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
-      return res.status(503).json({ error: 'Token renouvele, reessayez' });
-    }
     res.status(500).json({ error: 'Erreur verrouillage' });
   }
 });
 
-// Boost
 app.post(BASE_PATH + 'api/devices/:did/boost', requireAuth, async (req, res) => {
   try {
     const { minutes } = req.body;
-    let payload;
-    if (minutes === 0) {
-      payload = { attrs: { derog_mode: 0 } };
-    } else {
-      payload = { attrs: { derog_mode: 2, derog_time: minutes || 60 } };
-    }
-    const ok = await sendCommand(req.params.did, req.session.token, payload);
+    const payload = minutes === 0
+      ? { attrs: { derog_mode: 0 } }
+      : { attrs: { derog_mode: 2, derog_time: minutes || 60 } };
+    const ok = await sendCommand(req.params.did, payload);
     res.json({ success: ok });
   } catch (err) {
-    if (err.status === 401) {
-      const ok = await refreshTokenIfNeeded(req);
-      if (!ok) { req.session.destroy(); return res.status(401).json({ error: 'Session expiree' }); }
-      return res.status(503).json({ error: 'Token renouvele, reessayez' });
-    }
     res.status(500).json({ error: 'Erreur boost' });
   }
 });
@@ -392,5 +334,5 @@ app.get(BASE_PATH + '{*path}', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Heatzy Web demarre sur le port ${PORT} (base: ${BASE_PATH})`);
+  console.log(`Heatzy Web démarré sur le port ${PORT} (base: ${BASE_PATH})`);
 });
