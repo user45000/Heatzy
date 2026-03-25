@@ -65,24 +65,9 @@ body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var
 .simple-home{border-color:rgba(74,222,128,.35);background:linear-gradient(180deg,var(--bg2),rgba(74,222,128,.06))}
 .simple-home:hover{background:linear-gradient(180deg,var(--bg2),rgba(74,222,128,.15));border-color:rgba(74,222,128,.5);box-shadow:0 0 16px rgba(74,222,128,.1)}
 .simple-home:active{border-color:rgba(74,222,128,.7);box-shadow:0 0 24px rgba(74,222,128,.2)}
-.simple-status{width:100%;max-width:420px;font-size:12px;color:var(--t3)}
+.simple-status{width:100%;max-width:400px;text-align:center;font-size:12px;color:var(--t3);min-height:20px}
 .simple-status .s-ok{color:var(--ok)}
 .simple-status .s-warn{color:var(--warn)}
-.sl-count{text-align:center;margin-bottom:10px}
-.sl-list{display:flex;flex-direction:column;gap:4px}
-.sl-row{display:flex;align-items:center;justify-content:space-between;padding:7px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2)}
-.sl-name{font-size:12px;font-weight:500;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:8px}
-.sl-right{display:flex;align-items:center;gap:5px;flex-shrink:0}
-.sl-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;white-space:nowrap}
-.sl-cft{color:#fff;background:var(--cft)}
-.sl-eco{color:#fff;background:rgba(77,216,240,.85)}
-.sl-fro{color:#fff;background:rgba(180,154,255,.85)}
-.sl-stop{color:var(--t2);background:rgba(110,110,130,.25)}
-.sl-offline{color:var(--t3);background:rgba(255,255,255,.06)}
-.sl-unknown{color:var(--warn);background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.25)}
-.sl-prog{font-size:9px;font-weight:600;padding:2px 6px;border-radius:6px;white-space:nowrap}
-.sl-prog-on{color:var(--ok);background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.2)}
-.sl-prog-off{color:var(--t3);background:rgba(255,255,255,.04);border:1px solid var(--border)}
 
 /* Scenarios */
 .scenarios{display:flex;gap:6px;padding:10px 14px;background:var(--bg2);border-bottom:1px solid var(--border);overflow:hidden}
