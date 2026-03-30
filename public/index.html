@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="css/style.css?v=9">
+  <link rel="stylesheet" href="css/style.css?v=10">
 </head>
 <body>
   <div id="progress-bar" class="progress-bar" hidden><div class="progress-fill"></div></div>
@@ -48,6 +48,12 @@
           <span class="simple-icon">🧳</span>
           <span class="simple-label">Je pars</span>
           <span class="simple-desc">Tout eteindre</span>
+        </button>
+      </div>
+      <div class="simple-choose-wrap">
+        <button class="simple-choose-btn" id="simple-choose">
+          <span>🏠✨ Je rentre et je choisis</span>
+          <span class="simple-choose-desc">Choisir les radiateurs a activer</span>
         </button>
       </div>
       <div id="simple-status" class="simple-status"></div>
@@ -116,6 +122,23 @@
     </div>
   </div>
 
+  <!-- Choose radiators modal -->
+  <div id="choose-modal" class="modal-bg" hidden>
+    <div class="modal modal-choose">
+      <h3>🏠✨ Je rentre et je choisis</h3>
+      <p class="config-desc">Selectionne les radiateurs a activer</p>
+      <div class="choose-actions">
+        <button class="choose-action-btn" id="choose-all">Tout selectionner</button>
+        <button class="choose-action-btn" id="choose-none">Tout deselectionner</button>
+      </div>
+      <div id="choose-list" class="config-list"></div>
+      <div class="modal-footer">
+        <button class="btn-confirm" id="choose-confirm">✅ Activer</button>
+        <button class="btn-cancel" id="choose-cancel" style="margin-top:8px">Annuler</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Boost modal -->
   <div id="boost-modal" class="modal-bg" hidden>
     <div class="modal">
@@ -139,6 +162,6 @@
 
   <div id="toast" class="toast" hidden></div>
 
-  <script src="js/app.js?v=9"></script>
+  <script src="js/app.js?v=10"></script>
 </body>
 </html>

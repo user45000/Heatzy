@@ -69,6 +69,30 @@ body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var
 .simple-status .s-ok{color:var(--ok)}
 .simple-status .s-warn{color:var(--warn)}
 
+/* Simple choose button */
+.simple-choose-wrap{width:100%;max-width:420px}
+.simple-choose-btn{width:100%;display:flex;flex-direction:column;align-items:center;gap:6px;padding:18px 16px;border:2px solid rgba(251,191,36,.3);border-radius:20px;background:linear-gradient(180deg,var(--bg2),rgba(251,191,36,.05));cursor:pointer;transition:all .2s;font-family:inherit;color:var(--text);user-select:none;-webkit-tap-highlight-color:transparent}
+.simple-choose-btn:hover{background:linear-gradient(180deg,var(--bg2),rgba(251,191,36,.12));border-color:rgba(251,191,36,.5);box-shadow:0 0 16px rgba(251,191,36,.08)}
+.simple-choose-btn:active{transform:scale(.98)}
+.simple-choose-btn.is-busy{opacity:.5;pointer-events:none}
+.simple-choose-btn span:first-child{font-size:15px;font-weight:700}
+.simple-choose-desc{font-size:11px;color:var(--t3)}
+
+/* Choose modal */
+.modal-choose{max-width:380px}
+.choose-actions{display:flex;gap:6px;margin-bottom:10px}
+.choose-action-btn{flex:1;padding:6px;border:1px solid var(--border);border-radius:var(--r2);background:rgba(255,255,255,.04);color:var(--t2);font-size:11px;font-family:inherit;cursor:pointer;transition:all .15s}
+.choose-action-btn:hover{background:rgba(255,255,255,.08)}
+.choose-item{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:rgba(255,255,255,.03);border-radius:var(--r2);border:1px solid var(--border);cursor:pointer;transition:background .15s;-webkit-tap-highlight-color:transparent;gap:8px}
+.choose-item:hover:not(.offline){background:rgba(255,255,255,.06)}
+.choose-item.offline{opacity:.4;cursor:default}
+.choose-name{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;flex:1;min-width:0}
+.choose-offline-badge{font-size:10px;color:var(--t3);background:rgba(255,255,255,.06);padding:2px 6px;border-radius:8px;white-space:nowrap}
+.choose-check{width:20px;height:20px;accent-color:var(--ok);cursor:pointer;flex-shrink:0}
+.btn-confirm{width:100%;padding:10px;border:none;border-radius:var(--r2);background:linear-gradient(135deg,#4ade80,#22c55e);color:#000;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;margin-bottom:8px}
+.btn-confirm:hover{filter:brightness(1.08)}
+.btn-confirm:active{transform:scale(.98)}
+
 /* Scenarios */
 .scenarios{display:flex;gap:6px;padding:10px 14px;background:var(--bg2);border-bottom:1px solid var(--border);overflow:hidden}
 .scene-btn{flex:1;padding:10px 4px;border:none;border-radius:var(--r);font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;transition:all .15s;text-align:center;min-width:0;white-space:nowrap}

@@ -433,6 +433,48 @@ document.getElementById('simple-home').addEventListener('click', async()=>{
   } finally { btn.classList.remove('is-busy'); }
 });
 
+// "Je rentre et je choisis"
+document.getElementById('simple-choose').addEventListener('click', () => {
+  const list = document.getElementById('choose-list');
+  list.innerHTML = devices.map(d => {
+    const on = d.is_online;
+    return `<label class="choose-item${!on ? ' offline' : ''}">
+      <span class="choose-name"><span class="dot${on ? '' : ' off'}"></span>${esc(d.name)}</span>
+      ${!on ? '<span class="choose-offline-badge">hors ligne</span>' : ''}
+      <input type="checkbox" class="choose-check" data-did="${d.did}"${on ? ' checked' : ''}${!on ? ' disabled' : ''}>
+    </label>`;
+  }).join('');
+  document.getElementById('choose-modal').hidden = false;
+});
+
+document.getElementById('choose-cancel').addEventListener('click', () => {
+  document.getElementById('choose-modal').hidden = true;
+});
+
+document.getElementById('choose-all').addEventListener('click', () => {
+  document.querySelectorAll('.choose-check:not(:disabled)').forEach(cb => cb.checked = true);
+});
+
+document.getElementById('choose-none').addEventListener('click', () => {
+  document.querySelectorAll('.choose-check:not(:disabled)').forEach(cb => cb.checked = false);
+});
+
+document.getElementById('choose-confirm').addEventListener('click', async () => {
+  const selected = [...document.querySelectorAll('.choose-check:checked')].map(cb => cb.dataset.did);
+  if (selected.length === 0) { toast('Aucun radiateur sélectionné', 'error'); return; }
+  document.getElementById('choose-modal').hidden = true;
+  const btn = document.getElementById('simple-choose');
+  const statusEl = document.getElementById('simple-status');
+  btn.classList.add('is-busy');
+  statusEl.innerHTML = '⏳ Activation en cours...';
+  try {
+    for (const did of selected) await api('POST', `devices/${did}/timer`, { enabled: true });
+    statusEl.innerHTML = `<span class="s-ok">✅ ${selected.length} radiateur(s) activé(s)</span>`;
+  } catch(e) {
+    statusEl.innerHTML = '<span class="s-warn">❌ Erreur : ' + esc(e.message) + '</span>';
+  } finally { btn.classList.remove('is-busy'); }
+});
+
 // Toggle entre modes
 document.getElementById('simple-to-advanced').addEventListener('click', switchToAdvanced);
 document.getElementById('simple-mode-btn').addEventListener('click', switchToSimple);
